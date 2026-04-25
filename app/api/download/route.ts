@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// instances مجانية بديلة لـ cobalt
+const COBALT_INSTANCES = [
+  "https://cobalt.api.lostfiles.org",
+  "https://dwnld.nichlov.com",
+  "https://cobalt.tools.yt",
+];
+
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
@@ -8,45 +15,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "الرابط مطلوب" }, { status: 400 });
     }
 
-    const response = await fetch("https://api.cobalt.tools/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0",
-      },
-      body: JSON.stringify({
-        url: url,
-        videoQuality: "720",
-        filenameStyle: "pretty",
-        downloadMode: "auto",
-      }),
-    });
+    // جرب كل instance حتى يشتغل واحد
+    for (const instance of COBALT_INSTANCES) {
+      try {
+        const response = await fetch(`${instance}/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            url,
+            videoQuality: "720",
+            filenameStyle: "pretty",
+            downloadMode: "auto",
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
 
-    const data = await response.json();
+        const data = await response.json();
+        console.log(`${instance} response:`, JSON.stringify(data));
 
-    console.log("Cobalt response:", JSON.stringify(data));
-
-    if (data.status === "error" || data.status === "rate-limit") {
-      return NextResponse.json(
-        { error: data?.error?.code || "تعذر تنزيل الرابط" },
-        { status: 400 }
-      );
+        if (data.status === "tunnel" || data.status === "redirect") {
+          const downloadUrl = data.url || data.tunnel;
+          if (downloadUrl) {
+            return NextResponse.json({
+              downloadUrl,
+              platform: detectPlatform(url),
+            });
+          }
+        }
+      } catch (e) {
+        console.log(`${instance} failed, trying next...`);
+        continue;
+      }
     }
 
-    const downloadUrl = data.url || data.tunnel;
-
-    if (!downloadUrl) {
-      return NextResponse.json(
-        { error: "لم يتم العثور على رابط" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json({
-      downloadUrl,
-      platform: detectPlatform(url),
-    });
+    return NextResponse.json(
+      { error: "تعذر تنزيل الرابط، جرب لاحقاً" },
+      { status: 400 }
+    );
 
   } catch (error: any) {
     return NextResponse.json(
