@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const COBALT_INSTANCES = [
-  "https://cobalt.api.timelessnesses.me",
-  "https://cobalt.urdnot.pw",
-  "https://api.cobalt.tools",
-];
-
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
@@ -14,47 +8,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "الرابط مطلوب" }, { status: 400 });
     }
 
-    let lastError = "";
-
-    for (const instance of COBALT_INSTANCES) {
-      try {
-        const response = await fetch(instance + "/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            "User-Agent": "Mozilla/5.0",
-          },
-          body: JSON.stringify({
-            url: url,
-            videoQuality: "720",
-            audioFormat: "mp3",
-            filenameStyle: "pretty",
-            downloadMode: "auto",
-          }),
-        });
-
-        const data = await response.json();
-
-        if (data.status === "stream" || data.status === "redirect" || data.status === "tunnel") {
-          return NextResponse.json({ downloadUrl: data.url });
-        }
-
-        if (data.status === "picker") {
-          return NextResponse.json({ downloadUrl: data.picker[0]?.url });
-        }
-
-        lastError = data.error?.code || "فشل";
-      } catch (e: any) {
-        lastError = e.message;
-        continue;
+    const response = await fetch(
+      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
+      {
+        method: "GET",
+        headers: {
+          "x-rapidapi-key": process.env.RAPIDAPI_KEY!,
+          "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
+        },
       }
+    );
+
+    const data = await response.json();
+
+    if (!data.success) {
+      return NextResponse.json(
+        { error: "تعذر تنزيل الرابط" },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json(
-      { error: "تعذر التنزيل من جميع الخوادم: " + lastError },
-      { status: 400 }
-    );
+    // أخذ أفضل جودة متاحة
+    const links = data.links;
+    const best = links.find((l: any) => l.quality === "hd") || links[0];
+
+    return NextResponse.json({ downloadUrl: best.link });
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "حدث خطأ في الخادم" },
