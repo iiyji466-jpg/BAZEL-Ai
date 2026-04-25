@@ -13,25 +13,38 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        "User-Agent": "Mozilla/5.0",
       },
       body: JSON.stringify({
         url: url,
-        videoQuality: "1080",
+        videoQuality: "720",
         audioFormat: "mp3",
         filenameStyle: "pretty",
+        downloadMode: "auto",
       }),
     });
 
     const data = await response.json();
 
-    if (data.status === "error") {
-      return NextResponse.json(
-        { error: "تعذر تنزيل الرابط" },
-        { status: 400 }
-      );
+    // إذا رجع رابط مباشر
+    if (data.status === "stream" || data.status === "redirect") {
+      return NextResponse.json({ downloadUrl: data.url });
     }
 
-    return NextResponse.json({ downloadUrl: data.url, status: data.status });
+    // إذا رجع tunnel
+    if (data.status === "tunnel") {
+      return NextResponse.json({ downloadUrl: data.url });
+    }
+
+    // إذا رجع picker (منصات تحتوي أكثر من ملف)
+    if (data.status === "picker") {
+      return NextResponse.json({ downloadUrl: data.picker[0]?.url });
+    }
+
+    return NextResponse.json(
+      { error: data.error?.code || "تعذر تنزيل الرابط" },
+      { status: 400 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "حدث خطأ في الخادم" },
