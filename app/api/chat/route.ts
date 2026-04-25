@@ -1,4 +1,4 @@
-طimport Groq from "groq-sdk";
+import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
 
 const groq = new Groq({
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     ];
 
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+      model: "llama-3.3-70b-versatile",
       messages: messages,
       max_tokens: 1000,
       temperature: 0.7,
