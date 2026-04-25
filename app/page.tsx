@@ -7,39 +7,44 @@ const BOTS = [
   { id: "files", name: "الملفات والإنتاجية", icon: "📁", desc: "تحويل الملفات + أتمتة المهام", color: "#43e97b" },
   { id: "groups", name: "إدارة المجموعات", icon: "🛡️", desc: "قواعد + سياسات + محتوى", color: "#f093fb" },
   { id: "media", name: "صياد المقاطع", icon: "📥", desc: "تنزيل مقاطع من أي منصة", color: "#ff6584" },
-  { id: "ai", name: "الذكاء الاصطناعي", icon: "🤖", desc: "مساعد شامل لكل شيء", color: "#ffd700" },
+  { id: "ai", name: "الذكاء الاصطناعي", icon: "🤖", desc: "مساعد شامل + إنشاء صور", color: "#ffd700" },
 ];
 
 const SUGGESTIONS = [
-  { icon: "🎓", text: "احصل على نصائح" },
-  { icon: "🖼️", text: "وصف صورة" },
-  { icon: "📊", text: "تحليل البيانات" },
+  { icon: "🎨", text: "ارسم لي صورة قطة فضائية" },
+  { icon: "💡", text: "احصل على نصائح" },
   { icon: "📝", text: "لخص النص" },
+  { icon: "🌍", text: "ترجم جملة" },
 ];
 
 type Message = {
   role: "user" | "assistant";
   content: string;
   image?: string;
+  generatedImage?: string;
 };
 
 const formatMessage = (text: string): string => {
   let html = text;
-  html = html.replace(/^### (.*$)/gm, '<h3 style="font-size:16px;font-weight:700;color:#fff;margin:18px 0 10px;text-align:right">$1</h3>');
-  html = html.replace(/^## (.*$)/gm, '<h2 style="font-size:18px;font-weight:700;color:#fff;margin:20px 0 10px;text-align:right">$1</h2>');
-  html = html.replace(/^# (.*$)/gm, '<h1 style="font-size:20px;font-weight:700;color:#fff;margin:22px 0 12px;text-align:right">$1</h1>');
+  html = html.replace(/^### (.*$)/gm, '<div style="font-size:18px;font-weight:700;color:#fff;margin:22px 0 10px;text-align:right">$1</div>');
+  html = html.replace(/^## (.*$)/gm, '<div style="font-size:20px;font-weight:700;color:#fff;margin:24px 0 12px;text-align:right">$1</div>');
+  html = html.replace(/^# (.*$)/gm, '<div style="font-size:22px;font-weight:700;color:#fff;margin:26px 0 14px;text-align:right">$1</div>');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:700;color:#fff">$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em style="font-style:italic;color:#ccc">$1</em>');
   html = html.replace(/^(\d+)\. (.*$)/gm,
-    '<div style="display:flex;gap:16px;margin:10px 0;align-items:flex-start;direction:rtl;text-align:right"><span style="color:#fff;font-weight:700;font-size:16px;min-width:28px;text-align:right">$1.</span><span style="flex:1;color:#e0e0e0;font-size:15px;line-height:1.7">$2</span></div>');
+    '<div style="margin:18px 0 6px;text-align:right"><span style="font-size:17px;font-weight:700;color:#fff">$1. $2</span></div>');
   html = html.replace(/^[•\-\*] (.*$)/gm,
-    '<div style="display:flex;gap:16px;margin:10px 0;align-items:flex-start;direction:rtl"><span style="color:#fff;font-size:22px;line-height:1;min-width:20px">•</span><span style="flex:1;color:#e0e0e0;font-size:15px;line-height:1.7">$1</span></div>');
-  html = html.replace(/`(.*?)`/g,
-    '<code style="background:#1e1e1e;padding:2px 8px;border-radius:5px;font-family:monospace;font-size:13px;color:#43e97b;border:1px solid #2a2a2a">$1</code>');
-  html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #1e1e1e;margin:16px 0"/>');
+    '<div style="display:flex;gap:14px;margin:10px 0;align-items:flex-start;direction:rtl"><span style="color:#fff;font-size:20px;line-height:1.3;flex-shrink:0">•</span><span style="flex:1;color:#e0e0e0;font-size:16px;line-height:1.8">$1</span></div>');
+  html = html.replace(/`(.*?)`/g, '<code style="background:#1a1a1a;padding:2px 8px;border-radius:5px;font-family:monospace;font-size:13px;color:#43e97b">$1</code>');
+  html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #1e1e1e;margin:18px 0"/>');
   html = html.replace(/\n\n/g, '<div style="height:14px"></div>');
   html = html.replace(/\n/g, '<br/>');
   return html;
+};
+
+const isImageRequest = (text: string): boolean => {
+  const keywords = ["ارسم", "صورة", "اصنع صورة", "انشئ صورة", "generate image", "draw", "image of", "رسم", "صور لي", "صمم صورة"];
+  return keywords.some(k => text.toLowerCase().includes(k));
 };
 
 export default function Home() {
@@ -55,11 +60,13 @@ export default function Home() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const bot = BOTS.find((b) => b.id === selectedBot);
 
@@ -84,22 +91,17 @@ export default function Home() {
     const reader = new FileReader();
     reader.onload = () => setSelectedImage(reader.result as string);
     reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   const startRecording = async () => {
+    if (isRecording) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const recorder = new MediaRecorder(stream);
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (e) => chunks.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        const url = URL.createObjectURL(blob);
-        setInput((prev) => prev + " [تم تسجيل رسالة صوتية]");
-        stream.getTracks().forEach((t) => t.stop());
-      };
-      recorder.start();
       mediaRecorderRef.current = recorder;
+      recorder.start();
       setIsRecording(true);
     } catch {
       alert("لا يمكن الوصول إلى الميكروفون");
@@ -107,14 +109,35 @@ export default function Home() {
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
+    if (!isRecording) return;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
     setIsRecording(false);
+    setInput(prev => prev + (prev ? " " : "") + "🎤 رسالة صوتية");
   };
 
   const copyMessage = (text: string, index: number) => {
     navigator.clipboard.writeText(text);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const generateImage = async (prompt: string): Promise<string> => {
+    const res = await fetch("/api/image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.imageUrl;
   };
 
   const handleDownload = async () => {
@@ -145,8 +168,28 @@ export default function Home() {
     setError("");
     const newMsg: Message = { role: "user", content: userMsg };
     if (selectedImage) { newMsg.image = selectedImage; setSelectedImage(null); }
-    setMessages((prev) => [...prev, newMsg]);
+    setMessages(prev => [...prev, newMsg]);
     setLoading(true);
+
+    // إنشاء صورة
+    if (isImageRequest(userMsg)) {
+      setImageLoading(true);
+      try {
+        const imageUrl = await generateImage(userMsg);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: "تفضل! هذه الصورة التي طلبتها 🎨",
+          generatedImage: imageUrl
+        }]);
+      } catch (err: any) {
+        setMessages(prev => [...prev, { role: "assistant", content: "عذراً، لم أتمكن من إنشاء الصورة. حاول مجدداً." }]);
+      } finally {
+        setLoading(false);
+        setImageLoading(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -155,10 +198,10 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "حدث خطأ");
-      setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
+      setMessages(prev => [...prev, { role: "assistant", content: data.response }]);
     } catch (err: any) {
       setError(err.message || "فشل الاتصال بالخادم");
-      setMessages((prev) => prev.slice(0, -1));
+      setMessages(prev => prev.slice(0, -1));
       setInput(userMsg);
     } finally {
       setLoading(false);
@@ -173,120 +216,126 @@ export default function Home() {
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { background: #000 !important; color: #ececec; font-family: 'Segoe UI', 'Noto Kufi Arabic', Arial, sans-serif; direction: rtl; }
+        html, body { background: #000 !important; color: #ececec; font-family: 'Noto Kufi Arabic', 'Segoe UI', Arial, sans-serif; direction: rtl; font-size: 16px; line-height: 1.8; -webkit-font-smoothing: antialiased; }
+
         .app { min-height: 100vh; display: flex; flex-direction: column; background: #000; }
 
-        /* هيدر */
-        .header { padding: 14px 20px; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; gap: 12px; background: #000; position: sticky; top: 0; z-index: 10; }
+        .header { padding: 14px 20px; border-bottom: 1px solid #111; display: flex; align-items: center; gap: 12px; background: #000; position: sticky; top: 0; z-index: 10; }
         .header-logo { font-size: 22px; }
-        .header-text h1 { font-size: 16px; font-weight: 600; color: #fff; }
+        .header-text h1 { font-size: 16px; font-weight: 700; color: #fff; }
         .header-text p { font-size: 11px; color: #444; margin-top: 1px; }
-        .badge { margin-right: auto; background: #111; border: 1px solid #222; color: #666; font-size: 11px; padding: 3px 10px; border-radius: 20px; }
+        .badge { margin-right: auto; background: #0d0d0d; border: 1px solid #1a1a1a; color: #555; font-size: 11px; padding: 4px 12px; border-radius: 20px; }
 
         /* الصفحة الرئيسية */
-        .home-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 20px; gap: 32px; }
-        .welcome-title { font-size: 32px; font-weight: 700; color: #fff; text-align: center; }
-        .suggestions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 500px; }
-        .suggestion-btn { background: #111; border: 1px solid #222; border-radius: 50px; padding: 14px 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px; color: #ccc; font-family: inherit; transition: all 0.2s; }
-        .suggestion-btn:hover { background: #1a1a1a; border-color: #333; color: #fff; }
-        .suggestion-icon { font-size: 18px; }
-        .bots-section { width: 100%; max-width: 700px; }
-        .bots-label { font-size: 12px; color: #444; margin-bottom: 12px; text-align: center; }
-        .bots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-        .bot-card { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 14px; padding: 18px 12px; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .bot-card:hover { border-color: var(--cc); background: #111; transform: translateY(-2px); }
+        .home-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; gap: 36px; }
+        .welcome-title { font-size: 28px; font-weight: 700; color: #fff; text-align: center; }
+        .suggestions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 480px; }
+        .suggestion-btn { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 16px; padding: 16px 18px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #bbb; font-family: inherit; transition: all 0.2s; text-align: right; }
+        .suggestion-btn:hover { background: #111; border-color: #2a2a2a; color: #fff; transform: translateY(-1px); }
+        .suggestion-icon { font-size: 20px; flex-shrink: 0; }
+        .bots-section { width: 100%; max-width: 640px; }
+        .bots-label { font-size: 12px; color: #333; margin-bottom: 12px; text-align: center; }
+        .bots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+        .bot-card { background: #0a0a0a; border: 1px solid #141414; border-radius: 16px; padding: 20px 12px; cursor: pointer; transition: all 0.2s; text-align: center; }
+        .bot-card:hover { border-color: var(--cc); background: #0f0f0f; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
         .bot-icon { font-size: 28px; display: block; margin-bottom: 8px; }
-        .bot-name { font-size: 12px; font-weight: 600; color: #fff; margin-bottom: 4px; }
-        .bot-desc { font-size: 10px; color: #444; line-height: 1.5; }
+        .bot-name { font-size: 12px; font-weight: 600; color: #ddd; margin-bottom: 4px; }
+        .bot-desc { font-size: 10px; color: #333; line-height: 1.5; }
 
         /* شاشة الشات */
-        .chat-screen { flex: 1; display: flex; flex-direction: column; max-width: 720px; width: 100%; margin: 0 auto; padding: 0 16px; }
-        .chat-header { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1a1a1a; position: sticky; top: 53px; background: #000; z-index: 9; }
-        .back-btn { background: #111; border: 1px solid #1e1e1e; color: #aaa; font-size: 13px; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
-        .back-btn:hover { background: #1a1a1a; color: #fff; }
-        .chat-bot-icon { font-size: 20px; width: 36px; height: 36px; background: #111; border: 1px solid #1a1a1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+        .chat-screen { flex: 1; display: flex; flex-direction: column; max-width: 700px; width: 100%; margin: 0 auto; padding: 0 16px; }
+        .chat-header { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #111; position: sticky; top: 53px; background: #000; z-index: 9; }
+        .back-btn { background: #0d0d0d; border: 1px solid #1a1a1a; color: #888; font-size: 13px; padding: 6px 14px; border-radius: 10px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .back-btn:hover { background: #141414; color: #fff; }
+        .chat-bot-icon { font-size: 18px; width: 36px; height: 36px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         .chat-bot-name { font-size: 14px; font-weight: 600; color: #fff; }
-        .chat-bot-status { font-size: 11px; color: #3a9e6a; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
-        .status-dot { width: 6px; height: 6px; background: #3a9e6a; border-radius: 50%; animation: pulse 2s infinite; }
+        .chat-bot-status { font-size: 11px; color: #2d8a58; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+        .status-dot { width: 6px; height: 6px; background: #2d8a58; border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
         /* الرسائل */
-        .messages-area { flex: 1; overflow-y: auto; padding: 24px 0 12px; display: flex; flex-direction: column; gap: 0; min-height: 0; max-height: calc(100vh - 210px); }
-        .messages-area::-webkit-scrollbar { width: 3px; }
-        .messages-area::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 4px; }
+        .messages-area { flex: 1; overflow-y: auto; padding: 24px 0 12px; display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 200px); }
+        .messages-area::-webkit-scrollbar { width: 2px; }
+        .messages-area::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 4px; }
 
-        .empty-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: #333; padding: 60px 0; }
-        .empty-chat .big-icon { font-size: 44px; }
-        .empty-chat p { font-size: 14px; color: #333; }
+        .empty-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 0; }
+        .empty-chat .big-icon { font-size: 48px; filter: grayscale(0.5); }
+        .empty-chat p { font-size: 14px; color: #2a2a2a; }
 
         /* رسالة المستخدم */
-        .user-message-wrap { display: flex; justify-content: flex-end; margin: 4px 0 8px; animation: fadeIn 0.2s ease; }
-        .user-bubble { background: #1c1c1c; color: #fff; padding: 12px 18px; border-radius: 20px 20px 4px 20px; font-size: 15px; line-height: 1.7; max-width: 78%; white-space: pre-wrap; word-break: break-word; text-align: right; }
-        .user-image { max-width: 200px; border-radius: 12px; margin-bottom: 8px; display: block; }
+        .user-msg-wrap { display: flex; justify-content: flex-end; margin: 6px 0; animation: fadeIn 0.2s ease; }
+        .user-bubble { background: #1a1a1a; color: #fff; padding: 12px 18px; border-radius: 20px 20px 4px 20px; font-size: 16px; line-height: 1.75; max-width: 80%; white-space: pre-wrap; word-break: break-word; text-align: right; }
+        .user-image-preview { max-width: 180px; border-radius: 12px; margin-bottom: 8px; display: block; }
 
         /* رسالة البوت */
-        .bot-message-wrap { display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 4px; animation: fadeIn 0.2s ease; }
-        .bot-avatar { width: 30px; height: 30px; background: #111; border: 1px solid #1a1a1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; margin-top: 4px; }
-        .bot-content { flex: 1; }
-        .bot-bubble { font-size: 15px; line-height: 1.8; color: #e0e0e0; word-break: break-word; text-align: right; }
+        .bot-msg-wrap { display: flex; gap: 12px; align-items: flex-start; margin: 6px 0 2px; animation: fadeIn 0.2s ease; }
+        .bot-avatar { width: 30px; height: 30px; background: #0d0d0d; border: 1px solid #141414; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 4px; }
+        .bot-bubble { flex: 1; font-size: 16px; line-height: 1.85; color: #e0e0e0; word-break: break-word; text-align: right; padding-top: 2px; }
+        .generated-image { max-width: 100%; border-radius: 16px; margin-top: 12px; display: block; border: 1px solid #1a1a1a; }
 
         /* أيقونات التفاعل */
-        .message-actions { display: flex; gap: 16px; margin: 8px 0 16px 0; padding-right: 42px; justify-content: flex-start; }
-        .action-btn { background: none; border: none; color: #333; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 6px; transition: all 0.15s; display: flex; align-items: center; }
-        .action-btn:hover { color: #888; }
-        .action-btn.copied { color: #43e97b; }
+        .msg-actions { display: flex; gap: 14px; margin: 6px 0 18px; padding-right: 42px; }
+        .action-btn { background: none; border: none; color: #2a2a2a; cursor: pointer; font-size: 17px; padding: 4px 6px; border-radius: 8px; transition: all 0.15s; }
+        .action-btn:hover { color: #666; }
+        .action-btn.active { color: #43e97b; }
 
-        @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
 
         /* مؤشر الكتابة */
-        .typing-wrap { display: flex; gap: 12px; align-items: center; margin: 4px 0 16px; }
+        .typing-wrap { display: flex; gap: 12px; align-items: center; margin: 6px 0 18px; }
         .typing-dots { display: flex; gap: 5px; padding: 8px 4px; }
-        .typing-dots span { width: 7px; height: 7px; background: #333; border-radius: 50%; animation: bounce 1.2s infinite; }
+        .typing-dots span { width: 7px; height: 7px; background: #2a2a2a; border-radius: 50%; animation: bounce 1.2s infinite; }
         .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
         .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
         @keyframes bounce { 0%,80%,100%{transform:scale(0.8);opacity:0.4} 40%{transform:scale(1.1);opacity:1} }
 
-        .error-msg { background: rgba(255,60,60,0.08); border: 1px solid rgba(255,60,60,0.15); color: #ff6060; padding: 10px 14px; border-radius: 10px; font-size: 13px; margin: 8px 0; }
+        .error-msg { background: rgba(255,50,50,0.06); border: 1px solid rgba(255,50,50,0.12); color: #ff5555; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin: 8px 0; }
 
-        /* معاينة الصورة */
-        .image-preview { display: flex; align-items: center; gap: 8px; background: #111; border: 1px solid #222; border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; }
-        .image-preview img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
-        .image-preview span { font-size: 12px; color: #888; flex: 1; }
-        .remove-img { background: none; border: none; color: #555; cursor: pointer; font-size: 16px; padding: 0 4px; }
-        .remove-img:hover { color: #ff6060; }
+        /* معاينة الصورة المرفقة */
+        .img-preview-bar { display: flex; align-items: center; gap: 10px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
+        .img-preview-bar img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
+        .img-preview-bar span { font-size: 12px; color: #555; flex: 1; }
+        .remove-img-btn { background: none; border: none; color: #333; cursor: pointer; font-size: 18px; line-height: 1; transition: color 0.15s; }
+        .remove-img-btn:hover { color: #ff5555; }
 
         /* منطقة الإدخال */
         .input-area { padding: 10px 0 20px; }
-        .input-container { background: #111; border: 1px solid #222; border-radius: 26px; padding: 10px 14px; display: flex; align-items: flex-end; gap: 10px; transition: border-color 0.2s; }
-        .input-container:focus-within { border-color: #333; }
-        .input-container textarea { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 15px; font-family: inherit; resize: none; line-height: 1.6; max-height: 140px; padding: 2px 0; text-align: right; }
-        .input-container textarea::placeholder { color: #333; }
-        .input-actions { display: flex; align-items: center; gap: 8px; }
-        .icon-btn { background: none; border: none; color: #444; cursor: pointer; font-size: 20px; padding: 4px; border-radius: 8px; transition: color 0.15s; display: flex; align-items: center; }
-        .icon-btn:hover { color: #888; }
-        .icon-btn.recording { color: #ff6060; animation: pulse 1s infinite; }
-        .send-btn { background: #fff; border: none; color: #000; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; transition: all 0.15s; flex-shrink: 0; }
-        .send-btn:hover:not(:disabled) { background: #ddd; transform: scale(1.05); }
-        .send-btn:disabled { background: #1a1a1a; color: #333; cursor: not-allowed; }
-        .input-hint { font-size: 11px; color: #1e1e1e; text-align: center; margin-top: 8px; }
+        .input-wrap { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 28px; padding: 10px 12px 10px 12px; display: flex; align-items: flex-end; gap: 8px; transition: border-color 0.2s; }
+        .input-wrap:focus-within { border-color: #2a2a2a; }
+        .send-btn { background: #fff; border: none; color: #000; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; transition: all 0.15s; flex-shrink: 0; }
+        .send-btn:hover:not(:disabled) { background: #ddd; }
+        .send-btn:disabled { background: #141414; color: #2a2a2a; cursor: not-allowed; }
+        .input-wrap textarea { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 15px; font-family: inherit; resize: none; line-height: 1.6; max-height: 130px; padding: 2px 0; text-align: right; }
+        .input-wrap textarea::placeholder { color: #2a2a2a; }
+        .mic-btn { background: none; border: none; cursor: pointer; font-size: 20px; padding: 4px; border-radius: 8px; transition: all 0.15s; flex-shrink: 0; opacity: 0.5; }
+        .mic-btn:hover { opacity: 1; }
+        .mic-btn.rec { opacity: 1; animation: pulse 1s infinite; filter: drop-shadow(0 0 6px red); }
+        .img-btn { background: none; border: none; cursor: pointer; font-size: 20px; padding: 4px; border-radius: 8px; transition: all 0.15s; flex-shrink: 0; opacity: 0.5; }
+        .img-btn:hover { opacity: 1; }
+        .input-hint { font-size: 11px; color: #1a1a1a; text-align: center; margin-top: 8px; }
 
         /* صياد المقاطع */
         .media-screen { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 32px 16px; }
-        .media-box { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 18px; padding: 28px; width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 14px; }
-        .media-box h2 { color: #fff; font-size: 17px; text-align: center; }
-        .media-box p { color: #444; font-size: 12px; text-align: center; }
+        .media-box { background: #0a0a0a; border: 1px solid #141414; border-radius: 20px; padding: 28px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; }
+        .media-box h2 { color: #fff; font-size: 17px; text-align: center; font-weight: 700; }
+        .media-box > p { color: #333; font-size: 12px; text-align: center; }
         .platforms { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
-        .platform-tag { background: #111; border: 1px solid #1c1c1c; color: #555; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
-        .media-input { background: #080808; border: 1px solid #1c1c1c; border-radius: 10px; padding: 11px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; transition: border-color 0.2s; direction: ltr; font-family: inherit; }
-        .media-input:focus { border-color: #333; }
-        .media-btn { background: #fff; border: none; color: #000; padding: 12px; border-radius: 10px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: 700; transition: all 0.2s; width: 100%; }
+        .platform-tag { background: #0d0d0d; border: 1px solid #141414; color: #444; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
+        .media-input { background: #060606; border: 1px solid #141414; border-radius: 12px; padding: 12px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; transition: border-color 0.2s; direction: ltr; font-family: inherit; }
+        .media-input:focus { border-color: #2a2a2a; }
+        .media-btn { background: #fff; border: none; color: #000; padding: 13px; border-radius: 12px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: 700; transition: all 0.2s; width: 100%; }
         .media-btn:hover:not(:disabled) { background: #ddd; }
-        .media-btn:disabled { background: #111; color: #333; cursor: not-allowed; }
-        .media-error { background: rgba(255,60,60,0.08); border: 1px solid rgba(255,60,60,0.15); color: #ff6060; padding: 10px 14px; border-radius: 10px; font-size: 13px; text-align: center; }
-        .download-result { background: rgba(58,158,106,0.08); border: 1px solid rgba(58,158,106,0.2); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
-        .download-result p { color: #3a9e6a; font-size: 14px; }
-        .download-link { background: #3a9e6a; color: #fff; padding: 11px 26px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; font-family: inherit; }
-        .download-link:hover { background: #2d8a58; }
+        .media-btn:disabled { background: #0d0d0d; color: #222; cursor: not-allowed; }
+        .media-error { background: rgba(255,50,50,0.06); border: 1px solid rgba(255,50,50,0.12); color: #ff5555; padding: 10px 14px; border-radius: 10px; font-size: 13px; text-align: center; }
+        .download-result { background: rgba(45,138,88,0.08); border: 1px solid rgba(45,138,88,0.2); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .download-result p { color: #2d8a58; font-size: 14px; }
+        .download-link { background: #2d8a58; color: #fff; padding: 11px 26px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; font-family: inherit; transition: all 0.2s; }
+        .download-link:hover { background: #256e47; }
+
+        /* تحميل الصورة */
+        .image-generating { display: flex; align-items: center; gap: 10px; color: #555; font-size: 14px; margin: 8px 0; }
+        .img-spinner { width: 18px; height: 18px; border: 2px solid #1a1a1a; border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
@@ -304,16 +353,15 @@ export default function Home() {
         {!selectedBot ? (
           <div className="home-screen">
             <div className="welcome-title">كيف يمكنني المساعدة؟</div>
-
             <div className="suggestions-grid">
               {SUGGESTIONS.map((s, i) => (
-                <button key={i} className="suggestion-btn" onClick={() => { selectBot("ai"); setTimeout(() => sendMessage(s.text), 300); }}>
+                <button key={i} className="suggestion-btn"
+                  onClick={() => { selectBot("ai"); setTimeout(() => sendMessage(s.text), 400); }}>
                   <span className="suggestion-icon">{s.icon}</span>
                   <span>{s.text}</span>
                 </button>
               ))}
             </div>
-
             <div className="bots-section">
               <p className="bots-label">أو اختر بوتاً متخصصاً</p>
               <div className="bots-grid">
@@ -390,30 +438,32 @@ export default function Home() {
               ) : (
                 messages.map((msg, i) => (
                   msg.role === "user" ? (
-                    <div key={i} className="user-message-wrap">
+                    <div key={i} className="user-msg-wrap">
                       <div className="user-bubble">
-                        {msg.image && <img src={msg.image} alt="uploaded" className="user-image" />}
+                        {msg.image && <img src={msg.image} alt="uploaded" className="user-image-preview" />}
                         {msg.content}
                       </div>
                     </div>
                   ) : (
                     <div key={i}>
-                      <div className="bot-message-wrap">
+                      <div className="bot-msg-wrap">
                         <div className="bot-avatar">{bot?.icon}</div>
-                        <div className="bot-content">
-                          <div className="bot-bubble"
-                            dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+                        <div className="bot-bubble">
+                          <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+                          {msg.generatedImage && (
+                            <img src={msg.generatedImage} alt="generated" className="generated-image"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                          )}
                         </div>
                       </div>
-                      <div className="message-actions">
-                        <button className={`action-btn ${copiedIndex === i ? "copied" : ""}`}
-                          onClick={() => copyMessage(msg.content, i)}
-                          title="نسخ">
+                      <div className="msg-actions">
+                        <button className={`action-btn ${copiedIndex === i ? "active" : ""}`}
+                          onClick={() => copyMessage(msg.content, i)} title="نسخ">
                           {copiedIndex === i ? "✓" : "⧉"}
                         </button>
                         <button className="action-btn" title="إعجاب">👍</button>
                         <button className="action-btn" title="لا إعجاب">👎</button>
-                        <button className="action-btn" title="مشاركة">⬆</button>
+                        <button className="action-btn" title="مشاركة">↑</button>
                         <button className="action-btn" title="المزيد">•••</button>
                       </div>
                     </div>
@@ -424,9 +474,16 @@ export default function Home() {
               {loading && (
                 <div className="typing-wrap">
                   <div className="bot-avatar">{bot?.icon}</div>
-                  <div className="typing-dots">
-                    <span></span><span></span><span></span>
-                  </div>
+                  {imageLoading ? (
+                    <div className="image-generating">
+                      <div className="img-spinner"></div>
+                      <span>جاري إنشاء الصورة...</span>
+                    </div>
+                  ) : (
+                    <div className="typing-dots">
+                      <span></span><span></span><span></span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -436,36 +493,34 @@ export default function Home() {
 
             <div className="input-area">
               {selectedImage && (
-                <div className="image-preview">
+                <div className="img-preview-bar">
                   <img src={selectedImage} alt="preview" />
                   <span>صورة مرفقة</span>
-                  <button className="remove-img" onClick={() => setSelectedImage(null)}>✕</button>
+                  <button className="remove-img-btn" onClick={() => setSelectedImage(null)}>✕</button>
                 </div>
               )}
-              <div className="input-container">
-                <div className="input-actions">
-                  <button className="icon-btn" onClick={() => fileInputRef.current?.click()} title="رفع صورة">🖼</button>
-                  <button
-                    className={`icon-btn ${isRecording ? "recording" : ""}`}
-                    onMouseDown={startRecording}
-                    onMouseUp={stopRecording}
-                    onTouchStart={startRecording}
-                    onTouchEnd={stopRecording}
-                    title="تسجيل صوت">
-                    🎤
-                  </button>
-                </div>
+              <div className="input-wrap">
+                <button className="send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading}>
+                  {loading ? "⌛" : "↑"}
+                </button>
                 <textarea
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder={`اكتب رسالتك...`}
+                  placeholder="اكتب رسالتك..."
                   rows={1}
                   disabled={loading}
                 />
-                <button className="send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading}>
-                  {loading ? "⌛" : "↑"}
+                <button className="mic-btn" title="تسجيل صوت"
+                  onPointerDown={startRecording}
+                  onPointerUp={stopRecording}
+                  onPointerLeave={stopRecording}>
+                  🎤
+                </button>
+                <button className="img-btn" title="رفع صورة"
+                  onClick={() => fileInputRef.current?.click()}>
+                  🖼
                 </button>
               </div>
               <p className="input-hint">Enter للإرسال • Shift+Enter لسطر جديد</p>
