@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const systemPrompts: Record<string, string> = {
       translator: `أنت مترجم وموسوعة ذكية. مهامك:
@@ -101,4 +101,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-      }
+}
