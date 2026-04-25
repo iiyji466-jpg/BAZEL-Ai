@@ -13,19 +13,23 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0",
       },
       body: JSON.stringify({
-        url,
-        videoQuality: "1080",
+        url: url,
+        videoQuality: "720",
         filenameStyle: "pretty",
+        downloadMode: "auto",
       }),
     });
 
     const data = await response.json();
 
-    if (data.status === "error") {
+    console.log("Cobalt response:", JSON.stringify(data));
+
+    if (data.status === "error" || data.status === "rate-limit") {
       return NextResponse.json(
-        { error: "تعذر تنزيل الرابط" },
+        { error: data?.error?.code || "تعذر تنزيل الرابط" },
         { status: 400 }
       );
     }
@@ -34,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     if (!downloadUrl) {
       return NextResponse.json(
-        { error: "لم يتم العثور على رابط التحميل" },
+        { error: "لم يتم العثور على رابط" },
         { status: 400 }
       );
     }
