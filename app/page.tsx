@@ -28,7 +28,7 @@ const BOTS = [
     id: "media",
     name: "صياد المقاطع",
     icon: "📥",
-    desc: "إرشاد تنزيل الوسائط",
+    desc: "تنزيل مقاطع من أي منصة",
     color: "#ff6584",
   },
   {
@@ -51,6 +51,13 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // صياد المقاطع
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+  const [downloadUrl, setDownloadUrl] = useState("");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -64,7 +71,37 @@ export default function Home() {
     setSelectedBot(id);
     setMessages([]);
     setError("");
+    setMediaUrl("");
+    setMediaError("");
+    setDownloadUrl("");
     setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleDownload = async () => {
+    if (!mediaUrl.trim()) return;
+    setMediaLoading(true);
+    setMediaError("");
+    setDownloadUrl("");
+
+    try {
+      const res = await fetch("/api/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: mediaUrl.trim() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "فشل التنزيل");
+      }
+
+      setDownloadUrl(data.downloadUrl);
+    } catch (err: any) {
+      setMediaError(err.message || "حدث خطأ أثناء التنزيل");
+    } finally {
+      setMediaLoading(false);
+    }
   };
 
   const sendMessage = async () => {
@@ -175,20 +212,11 @@ export default function Home() {
           position: relative;
           overflow: hidden;
         }
-        .bot-card::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          opacity: 0;
-          transition: opacity 0.2s;
-          background: var(--card-glow);
-        }
         .bot-card:hover {
           border-color: var(--card-color);
           transform: translateY(-3px);
           box-shadow: 0 8px 32px var(--card-shadow);
         }
-        .bot-card:hover::before { opacity: 1; }
         .bot-icon { font-size: 40px; display: block; margin-bottom: 12px; }
         .bot-name { font-size: 15px; font-weight: 600; color: #e8e8f0; margin-bottom: 6px; }
         .bot-desc { font-size: 12px; color: #6b6b80; line-height: 1.5; }
@@ -251,6 +279,117 @@ export default function Home() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
+
+        /* صياد المقاطع */
+        .media-screen {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 40px 20px;
+          gap: 24px;
+        }
+        .media-box {
+          background: #111118;
+          border: 1px solid #2a2a3a;
+          border-radius: 20px;
+          padding: 32px;
+          width: 100%;
+          max-width: 600px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .media-box h2 {
+          color: #e8e8f0;
+          font-size: 18px;
+          text-align: center;
+          margin-bottom: 8px;
+        }
+        .media-box p {
+          color: #6b6b80;
+          font-size: 12px;
+          text-align: center;
+        }
+        .media-input {
+          background: #0d0d14;
+          border: 1px solid #2a2a3a;
+          border-radius: 12px;
+          padding: 12px 16px;
+          color: #e8e8f0;
+          font-size: 14px;
+          font-family: 'Noto Kufi Arabic', sans-serif;
+          outline: none;
+          width: 100%;
+          transition: border-color 0.2s;
+          direction: ltr;
+        }
+        .media-input:focus { border-color: #ff6584; }
+        .media-btn {
+          background: #ff6584;
+          border: none;
+          color: white;
+          padding: 13px;
+          border-radius: 12px;
+          cursor: pointer;
+          font-size: 15px;
+          font-family: 'Noto Kufi Arabic', sans-serif;
+          font-weight: 600;
+          transition: all 0.2s;
+          width: 100%;
+        }
+        .media-btn:hover:not(:disabled) { background: #ff4f72; transform: translateY(-1px); }
+        .media-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .media-error {
+          background: rgba(255,101,132,0.1);
+          border: 1px solid rgba(255,101,132,0.3);
+          color: #ff6584;
+          padding: 12px 16px;
+          border-radius: 10px;
+          font-size: 13px;
+          text-align: center;
+        }
+        .download-result {
+          background: rgba(67,233,123,0.1);
+          border: 1px solid rgba(67,233,123,0.3);
+          border-radius: 12px;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          align-items: center;
+        }
+        .download-result p {
+          color: #43e97b;
+          font-size: 14px;
+        }
+        .download-link {
+          background: #43e97b;
+          color: #0d0d14;
+          padding: 12px 28px;
+          border-radius: 10px;
+          font-weight: 700;
+          font-size: 15px;
+          text-decoration: none;
+          font-family: 'Noto Kufi Arabic', sans-serif;
+          transition: all 0.2s;
+        }
+        .download-link:hover { background: #2ecc71; transform: scale(1.03); }
+        .platforms {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          justify-content: center;
+        }
+        .platform-tag {
+          background: rgba(255,101,132,0.1);
+          border: 1px solid rgba(255,101,132,0.2);
+          color: #ff6584;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 11px;
+        }
+
         .messages-area {
           flex: 1;
           overflow-y: auto;
@@ -406,9 +545,9 @@ export default function Home() {
           <div className="header-logo">⚡</div>
           <div className="header-text">
             <h1>مجموعة البوتات الذكية</h1>
-            <p>مدعوم بـ Gemini AI</p>
+            <p>مدعوم بـ Groq AI</p>
           </div>
-          <div className="badge">Gemini 1.5 Flash</div>
+          <div className="badge">Llama 3.3 70B</div>
         </header>
 
         {!selectedBot ? (
@@ -432,6 +571,76 @@ export default function Home() {
                   <div className="bot-arrow" style={{ color: b.color }}>←</div>
                 </div>
               ))}
+            </div>
+          </div>
+        ) : selectedBot === "media" ? (
+          // واجهة صياد المقاطع الحقيقية
+          <div className="chat-screen">
+            <div className="chat-header">
+              <button className="back-btn" onClick={() => setSelectedBot(null)}>
+                ← رجوع
+              </button>
+              <div className="chat-bot-info">
+                <div className="chat-bot-icon">📥</div>
+                <div>
+                  <div className="chat-bot-name">صياد المقاطع</div>
+                  <div className="chat-bot-status">
+                    <div className="status-dot"></div>
+                    متصل
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="media-screen">
+              <div className="media-box">
+                <h2>📥 تنزيل المقاطع</h2>
+                <p>الصق رابط الفيديو من أي منصة وسننزله لك فوراً</p>
+
+                <div className="platforms">
+                  {["TikTok", "YouTube", "Instagram", "Twitter/X", "Facebook", "Pinterest"].map((p) => (
+                    <span key={p} className="platform-tag">{p}</span>
+                  ))}
+                </div>
+
+                <input
+                  className="media-input"
+                  type="url"
+                  placeholder="https://www.tiktok.com/..."
+                  value={mediaUrl}
+                  onChange={(e) => {
+                    setMediaUrl(e.target.value);
+                    setDownloadUrl("");
+                    setMediaError("");
+                  }}
+                />
+
+                <button
+                  className="media-btn"
+                  onClick={handleDownload}
+                  disabled={mediaLoading || !mediaUrl.trim()}
+                >
+                  {mediaLoading ? "⌛ جاري التنزيل..." : "⬇️ تنزيل الآن"}
+                </button>
+
+                {mediaError && (
+                  <div className="media-error">⚠️ {mediaError}</div>
+                )}
+
+                {downloadUrl && (
+                  <div className="download-result">
+                    <p>✅ جاهز للتنزيل!</p>
+                    <a
+                      href={downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="download-link"
+                    >
+                      ⬇️ اضغط هنا للتنزيل
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -508,4 +717,4 @@ export default function Home() {
       </div>
     </>
   );
-  }
+}
