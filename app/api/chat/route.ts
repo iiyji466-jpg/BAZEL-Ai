@@ -1,7 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,89 +10,71 @@ export async function POST(req: NextRequest) {
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: "GEMINI_API_KEY غير موجود في المتغيرات البيئية" },
+        { error: "GEMINI_API_KEY غير موجود" },
         { status: 500 }
       );
     }
-
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const systemPrompts: Record<string, string> = {
       translator: `أنت مترجم وموسوعة ذكية. مهامك:
 - الترجمة بين العربية والإنجليزية والفرنسية وأي لغة أخرى
 - تقديم معلومات موسوعية دقيقة
 - شرح المصطلحات والمفاهيم
-- الإجابة باللغة التي يستخدمها المستخدم
 كن دقيقاً وموجزاً وواضحاً.`,
 
       files: `أنت مساعد ذكي للإنتاجية وتحويل الملفات. مهامك:
 - توجيه المستخدمين لتحويل صيغ الملفات المختلفة
 - تقديم أكواد Python/JavaScript لمعالجة الملفات
-- شرح طرق ضغط وتحسين الملفات
-- المساعدة في أتمتة المهام المكتبية
-قدم كوداً قابلاً للتنفيذ عند الطلب.`,
+- المساعدة في أتمتة المهام المكتبية`,
 
-      groups: `أنت مساعد إدارة المجموعات والمجتمعات. مهامك:
+      groups: `أنت مساعد إدارة المجموعات. مهامك:
 - تقديم قواعد وسياسات للمجموعات
 - اقتراح رسائل تحذير وترحيب
-- مساعدة في حل النزاعات
-- تصميم هيكل إداري للمجموعات
-- اقتراح محتوى ونشاطات للمجموعة
-كن عملياً ومنظماً.`,
+- مساعدة في حل النزاعات`,
 
       media: `أنت صياد المقاطع الذكي. مهامك:
 - إرشاد المستخدمين لأدوات تنزيل الفيديو والصوت
-- شرح صيغ الوسائط المختلفة وجودتها
 - تقديم أكواد yt-dlp وأدوات مشابهة
-- المساعدة في معالجة وتحرير الوسائط
-- شرح الفروق بين الصيغ (MP4, MKV, MP3, FLAC...)
-قدم تعليمات تقنية دقيقة.`,
+- شرح الفروق بين الصيغ (MP4, MKV, MP3, FLAC...)`,
 
-      ai: `أنت مساعد ذكاء اصطناعي شامل مبني على Gemini. مهامك:
+      ai: `أنت مساعد ذكاء اصطناعي شامل. مهامك:
 - الإجابة على أي سؤال في أي مجال
 - تحليل النصوص والمشاكل المعقدة
-- كتابة الأكواد البرمجية بأي لغة
-- إبداع المحتوى الأدبي والتسويقي
-- التفكير النقدي وحل المشكلات
-كن ذكياً وشاملاً ومفيداً قدر الإمكان.`,
+- كتابة الأكواد البرمجية بأي لغة`,
     };
 
     const systemPrompt = systemPrompts[bot] || systemPrompts["ai"];
 
-    const chatHistory =
-      history?.map((msg: { role: string; content: string }) => ({
+    const messages = [
+      { role: "user", parts: [{ text: systemPrompt }] },
+      { role: "model", parts: [{ text: "فهمت. سأساعدك وفق مهامي المحددة." }] },
+      ...(history?.map((msg: { role: string; content: string }) => ({
         role: msg.role === "assistant" ? "model" : "user",
         parts: [{ text: msg.content }],
-      })) || [];
+      })) || []),
+      { role: "user", parts: [{ text: message }] },
+    ];
 
-    const chat = model.startChat({
-      history: [
-        {
-          role: "user",
-          parts: [{ text: systemPrompt }],
-        },
-        {
-          role: "model",
-          parts: [{ text: "فهمت. سأساعدك وفق مهامي المحددة." }],
-        },
-        ...chatHistory,
-      ],
-    });
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: messages }),
+      }
+    );
 
-    const result = await chat.sendMessage(message);
-    const response = result.response.text();
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error?.message || "خطأ من Gemini API");
+    }
+
+    const response = data.candidates?.[0]?.content?.parts?.[0]?.text || "لا يوجد رد";
 
     return NextResponse.json({ response });
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-
-    if (error?.message?.includes("API_KEY_INVALID")) {
-      return NextResponse.json(
-        { error: "مفتاح API غير صالح. تحقق من GEMINI_API_KEY" },
-        { status: 401 }
-      );
-    }
-
     return NextResponse.json(
       { error: error?.message || "حدث خطأ في الخادم" },
       { status: 500 }
