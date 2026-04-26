@@ -32,10 +32,8 @@ const formatMessage = (text: string): string => {
   html = html.replace(/^# (.*$)/gm, '<div style="font-size:22px;font-weight:700;color:#fff;margin:26px 0 14px;text-align:right">$1</div>');
   html = html.replace(/\*\*(.*?)\*\*/g, '<strong style="font-weight:700;color:#fff">$1</strong>');
   html = html.replace(/\*(.*?)\*/g, '<em style="font-style:italic;color:#ccc">$1</em>');
-  html = html.replace(/^(\d+)\. (.*$)/gm,
-    '<div style="margin:18px 0 6px;text-align:right"><span style="font-size:17px;font-weight:700;color:#fff">$1. $2</span></div>');
-  html = html.replace(/^[•\-\*] (.*$)/gm,
-    '<div style="display:flex;gap:14px;margin:10px 0;align-items:flex-start;direction:rtl"><span style="color:#fff;font-size:20px;line-height:1.3;flex-shrink:0">•</span><span style="flex:1;color:#e0e0e0;font-size:16px;line-height:1.8">$1</span></div>');
+  html = html.replace(/^(\d+)\. (.*$)/gm, '<div style="margin:18px 0 6px;text-align:right"><span style="font-size:17px;font-weight:700;color:#fff">$1. $2</span></div>');
+  html = html.replace(/^[•\-\*] (.*$)/gm, '<div style="display:flex;gap:14px;margin:10px 0;align-items:flex-start;direction:rtl"><span style="color:#fff;font-size:20px;line-height:1.3;flex-shrink:0">•</span><span style="flex:1;color:#e0e0e0;font-size:16px;line-height:1.8">$1</span></div>');
   html = html.replace(/`(.*?)`/g, '<code style="background:#1a1a1a;padding:2px 8px;border-radius:5px;font-family:monospace;font-size:13px;color:#43e97b">$1</code>');
   html = html.replace(/^---$/gm, '<hr style="border:none;border-top:1px solid #1e1e1e;margin:18px 0"/>');
   html = html.replace(/\n\n/g, '<div style="height:14px"></div>');
@@ -48,7 +46,6 @@ const isImageRequest = (text: string): boolean => {
   return keywords.some(k => text.toLowerCase().includes(k));
 };
 
-// ===== مكوّن الإيميل المؤقت =====
 function EmailTemp() {
   const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
@@ -126,7 +123,6 @@ function EmailTemp() {
       <div style={{ background: "#0a0a0a", border: "1px solid #141414", borderRadius: 20, padding: 28, width: "100%", maxWidth: 500, display: "flex", flexDirection: "column", gap: 16 }}>
         <h2 style={{ color: "#fff", fontSize: 17, textAlign: "center" }}>📧 إيميل مؤقت</h2>
         <p style={{ color: "#333", fontSize: 12, textAlign: "center" }}>أنشئ إيميل مؤقت فوري واستقبل الرسائل</p>
-
         {!email ? (
           <button onClick={createEmail} disabled={loadingCreate}
             style={{ background: "#fff", border: "none", color: "#000", padding: 13, borderRadius: 12, cursor: "pointer", fontSize: 15, fontFamily: "inherit", fontWeight: 700, width: "100%", opacity: loadingCreate ? 0.6 : 1 }}>
@@ -141,12 +137,10 @@ function EmailTemp() {
                 {copied ? "✓ تم" : "نسخ"}
               </button>
             </div>
-
             <button onClick={checkMsgs} disabled={checking}
               style={{ background: "#111", border: "1px solid #1a1a1a", color: "#fff", padding: 12, borderRadius: 12, cursor: "pointer", fontSize: 14, fontFamily: "inherit", width: "100%", opacity: checking ? 0.6 : 1 }}>
               {checking ? "⌛ جاري التحديث..." : "🔄 تحديث الرسائل"}
             </button>
-
             {msgs.length === 0 ? (
               <div style={{ textAlign: "center", color: "#333", fontSize: 13, padding: "20px 0" }}>لا توجد رسائل — اضغط تحديث</div>
             ) : (
@@ -160,7 +154,6 @@ function EmailTemp() {
                 ))}
               </div>
             )}
-
             {selectedMsg && (
               <div style={{ background: "#0f0f0f", border: "1px solid #1a1a1a", borderRadius: 12, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
@@ -171,7 +164,6 @@ function EmailTemp() {
                 <div style={{ color: "#ccc", fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{selectedMsg.text || "(الرسالة فارغة)"}</div>
               </div>
             )}
-
             <button onClick={reset}
               style={{ background: "none", border: "1px solid #1a1a1a", color: "#444", padding: 10, borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "inherit", width: "100%" }}>
               🗑️ إنشاء إيميل جديد
@@ -183,7 +175,6 @@ function EmailTemp() {
   );
 }
 
-// ===== الصفحة الرئيسية =====
 export default function Home() {
   const [selectedBot, setSelectedBot] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -290,9 +281,7 @@ export default function Home() {
 
   const handleDownload = async () => {
     if (!mediaUrl.trim()) return;
-    setMediaLoading(true);
-    setMediaError("");
-    setDownloadUrl("");
+    setMediaLoading(true); setMediaError(""); setDownloadUrl("");
     try {
       const res = await fetch("/api/download", {
         method: "POST",
@@ -312,8 +301,7 @@ export default function Home() {
   const sendMessage = async (customMsg?: string) => {
     const userMsg = customMsg || input.trim();
     if (!userMsg || loading) return;
-    setInput("");
-    setError("");
+    setInput(""); setError("");
     const newMsg: Message = { role: "user", content: userMsg };
     if (selectedImage) { newMsg.image = selectedImage; setSelectedImage(null); }
     setMessages(prev => [...prev, newMsg]);
@@ -327,8 +315,7 @@ export default function Home() {
       } catch {
         setMessages(prev => [...prev, { role: "assistant", content: "عذراً، لم أتمكن من إنشاء الصورة. حاول مجدداً." }]);
       } finally {
-        setLoading(false);
-        setImageLoading(false);
+        setLoading(false); setImageLoading(false);
       }
       return;
     }
@@ -382,7 +369,7 @@ export default function Home() {
         .bot-desc { font-size: 10px; color: #333; line-height: 1.5; }
         .chat-screen { flex: 1; display: flex; flex-direction: column; max-width: 700px; width: 100%; margin: 0 auto; padding: 0 16px; }
         .chat-header { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #111; position: sticky; top: 53px; background: #000; z-index: 9; }
-        .back-btn { background: #0d0d0d; border: 1px solid #1a1a1a; color: #888; font-size: 13px; padding: 6px 14px; border-radius: 10px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+        .back-btn { background: #0d0d0d; border: 1px solid #1a1a1a; color: #888; font-size: 13px; padding: 6px 14px; border-radius: 10px; cursor: pointer; font-family: inherit; }
         .back-btn:hover { background: #141414; color: #fff; }
         .chat-bot-icon { font-size: 18px; width: 36px; height: 36px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
         .chat-bot-name { font-size: 14px; font-weight: 600; color: #fff; }
@@ -417,24 +404,26 @@ export default function Home() {
         .img-preview-bar { display: flex; align-items: center; gap: 10px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
         .img-preview-bar img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
         .img-preview-bar span { font-size: 12px; color: #555; flex: 1; }
-        .remove-img-btn { background: none; border: none; color: #333; cursor: pointer; font-size: 18px; line-height: 1; transition: color 0.15s; }
+        .remove-img-btn { background: none; border: none; color: #333; cursor: pointer; font-size: 18px; }
         .remove-img-btn:hover { color: #ff5555; }
-        .input-area { padding: 10px 0 20px; }
+        .input-area { padding: 10px 0 20px; flex-shrink: 0; }
         .input-row { display: flex; align-items: center; gap: 8px; }
-        .speak-btn { background: #000; border: 2px solid #1e1e1e; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
-        .speak-btn:hover { border-color: #333; }
-        .speak-btn.speaking { border-color: #555; }
-        .speak-btn svg { width: 20px; height: 20px; }
-        .input-wrap { background: #111; border: 1px solid #1e1e1e; border-radius: 30px; padding: 11px 18px; display: flex; align-items: center; gap: 12px; flex: 1; transition: border-color 0.2s; }
+        .speak-btn { background: #111; border: 1px solid #1e1e1e; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+        .speak-btn:hover { background: #1a1a1a; border-color: #333; }
+        .speak-btn svg { width: 18px; height: 18px; }
+        .input-wrap { background: #111; border: 1px solid #1e1e1e; border-radius: 30px; padding: 8px 8px 8px 14px; display: flex; align-items: center; gap: 8px; flex: 1; transition: border-color 0.2s; }
         .input-wrap:focus-within { border-color: #2a2a2a; }
+        .send-btn { background: #fff; border: none; color: #000; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; flex-shrink: 0; transition: all 0.15s; }
+        .send-btn:hover:not(:disabled) { background: #ddd; }
+        .send-btn:disabled { background: #1e1e1e; color: #333; cursor: not-allowed; }
         .input-wrap textarea { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 15px; font-family: inherit; resize: none; line-height: 1.6; max-height: 130px; padding: 0; text-align: right; }
         .input-wrap textarea::placeholder { color: #2a2a2a; }
-        .divider-line { width: 1px; height: 22px; background: #222; flex-shrink: 0; }
+        .divider-line { width: 1px; height: 20px; background: #1e1e1e; flex-shrink: 0; }
         .mic-btn { background: none; border: none; cursor: pointer; padding: 2px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-        .mic-btn svg { width: 22px; height: 22px; stroke: #555; fill: none; transition: stroke 0.15s; }
-        .mic-btn:hover svg { stroke: #999; }
+        .mic-btn svg { width: 20px; height: 20px; stroke: #444; fill: none; transition: stroke 0.15s; }
+        .mic-btn:hover svg { stroke: #888; }
         .mic-btn.rec svg { stroke: #ff3333; }
-        .plus-btn { background: #111; border: 1px solid #1e1e1e; color: #777; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; font-size: 24px; font-weight: 300; line-height: 1; }
+        .plus-btn { background: #111; border: 1px solid #1e1e1e; color: #666; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 22px; font-weight: 300; transition: all 0.15s; }
         .plus-btn:hover { background: #1a1a1a; color: #fff; border-color: #2a2a2a; }
         .input-hint { font-size: 11px; color: #1a1a1a; text-align: center; margin-top: 8px; }
         .image-generating { display: flex; align-items: center; gap: 10px; color: #555; font-size: 14px; }
@@ -446,16 +435,14 @@ export default function Home() {
         .media-box > p { color: #333; font-size: 12px; text-align: center; }
         .platforms { display: flex; flex-wrap: wrap; gap: 7px; justify-content: center; }
         .platform-tag { background: #0d0d0d; border: 1px solid #141414; color: #444; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
-        .media-input { background: #060606; border: 1px solid #141414; border-radius: 12px; padding: 12px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; transition: border-color 0.2s; direction: ltr; font-family: inherit; }
+        .media-input { background: #060606; border: 1px solid #141414; border-radius: 12px; padding: 12px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; direction: ltr; font-family: inherit; }
         .media-input:focus { border-color: #2a2a2a; }
-        .media-btn { background: #fff; border: none; color: #000; padding: 13px; border-radius: 12px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: 700; transition: all 0.2s; width: 100%; }
-        .media-btn:hover:not(:disabled) { background: #ddd; }
+        .media-btn { background: #fff; border: none; color: #000; padding: 13px; border-radius: 12px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight: 700; width: 100%; }
         .media-btn:disabled { background: #0d0d0d; color: #222; cursor: not-allowed; }
         .media-error { background: rgba(255,50,50,0.06); border: 1px solid rgba(255,50,50,0.12); color: #ff5555; padding: 10px 14px; border-radius: 10px; font-size: 13px; text-align: center; }
         .download-result { background: rgba(45,138,88,0.08); border: 1px solid rgba(45,138,88,0.2); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
         .download-result p { color: #2d8a58; font-size: 14px; }
         .download-link { background: #2d8a58; color: #fff; padding: 11px 26px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; font-family: inherit; }
-        .download-link:hover { background: #256e47; }
       `}</style>
 
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
@@ -506,7 +493,7 @@ export default function Home() {
                 <div className="chat-bot-icon">📥</div>
                 <div>
                   <div className="chat-bot-name">صياد المقاطع</div>
-                  <div className="chat-bot-status"><div className="status-dot"></div>متصل</div>
+                  <div className="chat-bot-status"><div className="status-dot" />متصل</div>
                 </div>
               </div>
             </div>
@@ -515,13 +502,12 @@ export default function Home() {
                 <h2>📥 تنزيل المقاطع</h2>
                 <p>الصق رابط الفيديو من أي منصة</p>
                 <div className="platforms">
-                  {["TikTok", "YouTube", "Instagram", "Twitter/X", "Facebook"].map((p) => (
+                  {["TikTok", "YouTube", "Instagram", "Twitter/X", "Facebook"].map(p => (
                     <span key={p} className="platform-tag">{p}</span>
                   ))}
                 </div>
                 <input className="media-input" type="url" placeholder="https://..."
-                  value={mediaUrl}
-                  onChange={(e) => { setMediaUrl(e.target.value); setDownloadUrl(""); setMediaError(""); }} />
+                  value={mediaUrl} onChange={e => { setMediaUrl(e.target.value); setDownloadUrl(""); setMediaError(""); }} />
                 <button className="media-btn" onClick={handleDownload} disabled={mediaLoading || !mediaUrl.trim()}>
                   {mediaLoading ? "⌛ جاري التنزيل..." : "⬇️ تنزيل الآن"}
                 </button>
@@ -544,7 +530,7 @@ export default function Home() {
                 <div className="chat-bot-icon">📧</div>
                 <div>
                   <div className="chat-bot-name">إيميل مؤقت</div>
-                  <div className="chat-bot-status"><div className="status-dot"></div>متصل</div>
+                  <div className="chat-bot-status"><div className="status-dot" />متصل</div>
                 </div>
               </div>
             </div>
@@ -559,7 +545,7 @@ export default function Home() {
                 <div className="chat-bot-icon">{bot?.icon}</div>
                 <div>
                   <div className="chat-bot-name">{bot?.name}</div>
-                  <div className="chat-bot-status"><div className="status-dot"></div>متصل</div>
+                  <div className="chat-bot-status"><div className="status-dot" />متصل</div>
                 </div>
               </div>
             </div>
@@ -571,7 +557,7 @@ export default function Home() {
                   <p>ابدأ المحادثة مع {bot?.name}</p>
                 </div>
               ) : (
-                messages.map((msg, i) => (
+                messages.map((msg, i) =>
                   msg.role === "user" ? (
                     <div key={i} className="user-msg-wrap">
                       <div className="user-bubble">
@@ -587,7 +573,7 @@ export default function Home() {
                           <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
                           {msg.generatedImage && (
                             <img src={msg.generatedImage} alt="generated" className="generated-image"
-                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                           )}
                         </div>
                       </div>
@@ -603,7 +589,7 @@ export default function Home() {
                       </div>
                     </div>
                   )
-                ))
+                )
               )}
 
               {loading && (
@@ -611,13 +597,11 @@ export default function Home() {
                   <div className="bot-avatar">{bot?.icon}</div>
                   {imageLoading ? (
                     <div className="image-generating">
-                      <div className="img-spinner"></div>
+                      <div className="img-spinner" />
                       <span>جاري إنشاء الصورة...</span>
                     </div>
                   ) : (
-                    <div className="typing-dots">
-                      <span></span><span></span><span></span>
-                    </div>
+                    <div className="typing-dots"><span /><span /><span /></div>
                   )}
                 </div>
               )}
@@ -644,22 +628,34 @@ export default function Home() {
                     <rect x="18" y="9" width="3" height="6" rx="1"/>
                   </svg>
                 </button>
+
                 <div className="input-wrap">
+                  {/* ✅ زر الإرسال هنا داخل الحقل */}
+                  <button className="send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading} title="إرسال">
+                    {loading ? (
+                      <div style={{ width: 14, height: 14, border: "2px solid #555", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                    ) : (
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"/>
+                        <polyline points="5 12 12 5 19 12"/>
+                      </svg>
+                    )}
+                  </button>
+
                   <textarea
                     ref={inputRef}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={e => setInput(e.target.value)}
                     onKeyDown={handleKey}
                     placeholder="اسأل عن أي شيء"
                     rows={1}
                     disabled={loading}
                   />
+
                   <div className="divider-line" />
                   <button className={`mic-btn ${isRecording ? "rec" : ""}`}
-                    onPointerDown={startRecording}
-                    onPointerUp={stopRecording}
-                    onPointerLeave={stopRecording}
-                    title="تسجيل صوت">
+                    onPointerDown={startRecording} onPointerUp={stopRecording} onPointerLeave={stopRecording}
+                    title="اضغط للتسجيل">
                     <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="2" width="6" height="12" rx="3"/>
                       <path d="M5 10a7 7 0 0 0 14 0"/>
@@ -668,6 +664,7 @@ export default function Home() {
                     </svg>
                   </button>
                 </div>
+
                 <button className="plus-btn" onClick={() => fileInputRef.current?.click()} title="إضافة صورة">+</button>
               </div>
               <p className="input-hint">Enter للإرسال • Shift+Enter لسطر جديد</p>
