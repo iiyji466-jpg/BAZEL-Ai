@@ -11,86 +11,82 @@ export async function POST(req: NextRequest) {
 
     const cleanUrl = url.trim();
     
-    // معالجة خاصة لروابط YouTube Shorts
+    // تحويل رابط YouTube Shorts إلى رابط عادي
     let finalUrl = cleanUrl;
     if (cleanUrl.includes('youtube.com/shorts/')) {
-      // تحويل رابط Shorts إلى رابط عادي
       const videoId = cleanUrl.split('/shorts/')[1]?.split('?')[0];
       if (videoId) {
         finalUrl = `https://www.youtube.com/watch?v=${videoId}`;
       }
     }
 
-    // المحاولة الأولى: استخدام tikwm
+    // المحاولة الأولى: tikwm (يدعم يوتيوب، تيك توك، انستغرام، فيسبوك)
     try {
-      const res1 = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(finalUrl)}`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json'
-        }
+      const res = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(finalUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
       });
       
-      // التحقق من أن الاستجابة ليست فارغة
-      const text1 = await res1.text();
-      if (!text1 || text1.trim() === '') {
-        throw new Error('Empty response');
-      }
-      
-      const data1 = JSON.parse(text1);
-      
-      if (data1.code === 0 && data1.data) {
-        const videoUrl = data1.data.play || data1.data.wmplay || data1.data.hdplay;
-        if (videoUrl && videoUrl.startsWith('http')) {
-          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+      const text = await res.text();
+      if (text && text.trim()) {
+        const data = JSON.parse(text);
+        if (data.code === 0 && data.data) {
+          const videoUrl = data.data.play || data.data.wmplay || data.data.hdplay;
+          if (videoUrl && videoUrl.startsWith('http')) {
+            return NextResponse.json({ success: true, downloadUrl: videoUrl });
+          }
         }
       }
     } catch (err) {
       console.log("tikwm failed:", err);
     }
 
-    // المحاولة الثانية: استخدام y2mate (يدعم يوتيوب)
+    // المحاولة الثانية: savetik (بديل يعمل)
     try {
-      const res2 = await fetch(`https://y2mate.com/api/json?url=${encodeURIComponent(finalUrl)}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+      const res = await fetch(`https://savetik.co/api/ajaxSearch?q=${encodeURIComponent(finalUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
       });
       
-      const text2 = await res2.text();
-      if (!text2 || text2.trim() === '') {
-        throw new Error('Empty response');
-      }
-      
-      const data2 = JSON.parse(text2);
-      
-      if (data2.video && data2.video[0] && data2.video[0].url) {
-        return NextResponse.json({ success: true, downloadUrl: data2.video[0].url });
+      const text = await res.text();
+      if (text && text.trim()) {
+        const data = JSON.parse(text);
+        const videoUrl = data.video || data.url || data.images?.[0];
+        if (videoUrl && videoUrl.startsWith('http')) {
+          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+        }
       }
     } catch (err) {
-      console.log("y2mate failed:", err);
+      console.log("savetik failed:", err);
     }
 
-    // المحاولة الثالثة: استخدام تحويل مباشر ليوتيوب
-    if (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be')) {
-      try {
-        const videoId = extractYouTubeId(finalUrl);
-        if (videoId) {
-          // رابط مباشر من خوادم يوتيوب (جودة منخفضة)
-          const directUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
-          // ملاحظة: هذا رابط صورة وليس فيديو، لكنه يعمل كبديل
-          return NextResponse.json({ 
-            success: true, 
-            downloadUrl: `https://www.y2mate.com/youtube/${videoId}`,
-            note: "اضغط على الرابط ثم اختر الجودة"
-          });
+    // المحاولة الثالثة: ssstik.io
+    try {
+      const res = await fetch(`https://ssstik.io/abc?url=${encodeURIComponent(finalUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      
+      const text = await res.text();
+      if (text && text.trim()) {
+        const data = JSON.parse(text);
+        if (data.url) {
+          return NextResponse.json({ success: true, downloadUrl: data.url });
         }
-      } catch (err) {
-        console.log("direct failed:", err);
+      }
+    } catch (err) {
+      console.log("ssstik failed:", err);
+    }
+
+    // إذا فشل كل شيء - إرجاع رابط بديل للمستخدم
+    if (finalUrl.includes('youtube.com') || finalUrl.includes('youtu.be')) {
+      const videoId = extractYouTubeId(finalUrl);
+      if (videoId) {
+        return NextResponse.json({ 
+          success: true, 
+          downloadUrl: `https://y2meta.app/en/youtube/${videoId}/`,
+          note: "اضغط على الرابط ثم اختر جودة التحميل"
+        });
       }
     }
 
-    // إذا فشل كل شيء
     return NextResponse.json({ 
       error: "تعذر تحميل الفيديو. تأكد من الرابط وجرب مرة أخرى" 
     }, { status: 400 });
@@ -101,7 +97,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// دالة لاستخراج ID يوتيوب
 function extractYouTubeId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=)([\w-]+)/,
@@ -109,7 +104,6 @@ function extractYouTubeId(url: string): string | null {
     /(?:youtube\.com\/shorts\/)([\w-]+)/,
     /(?:youtube\.com\/embed\/)([\w-]+)/
   ];
-  
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) return match[1];
