@@ -2,20 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    let { url } = await req.json();
+    const { url } = await req.json();
 
-    // 1. تنظيف الرابط تلقائياً (إزالة المسافات أو أي نص زائد قبل أو بعد الرابط)
-    if (url) {
-      // هذا السطر يستخرج الرابط فقط حتى لو نسخ المستخدم نصاً معه
-      const urlMatch = url.match(/\bhttps?:\/\/\S+/gi);
-      url = urlMatch ? urlMatch[0] : url.trim();
+    if (!url) {
+      return NextResponse.json({ error: "أدخل الرابط أولاً" }, { status: 400 });
     }
 
-    if (!url || !url.startsWith("http")) {
-      return NextResponse.json({ error: "الرجاء لصق رابط صحيح" }, { status: 400 });
-    }
+    // 1. تنظيف الرابط من أي حروف زائدة قد يضعها المستخدم بالخطأ
+    const cleanUrl = url.trim().match(/https?:\/\/[^\s]+/g)?.[0] || url.trim();
 
-    // 2. الاتصال بالمحرك العالمي (يدعم يوتيوب المختصر، تيك توك، انستقرام)
+    // 2. طلب الفيديو من محرك Cobalt المخصص لتجاوز الحظر
     const response = await fetch("https://api.cobalt.tools/api/json", {
       method: "POST",
       headers: {
@@ -23,26 +19,25 @@ export async function POST(req: NextRequest) {
         "Accept": "application/json",
       },
       body: JSON.stringify({
-        url: url, 
-        vQuality: "720",
+        url: cleanUrl,
+        vQuality: "720", 
         vCodec: "h264",
-        isNoTTWatermark: true, // يزيل علامة تيك توك تلقائياً
+        isNoTTWatermark: true // إزالة علامة تيك توك المائية
       }),
     });
 
     const data = await response.json();
 
-    // 3. إرسال الرابط النهائي للمستخدم
-    if (data && data.url) {
-      return NextResponse.json({
-        downloadUrl: data.url,
-        title: "تم تجهيز الفيديو بنجاح"
-      });
-    } else {
-      return NextResponse.json({ error: "عذراً، هذا الرابط غير مدعوم حالياً" }, { status: 400 });
+    // 3. التحقق من النتيجة
+    if (data.status === "error" || !data.url) {
+      console.error("خطأ من المحرك:", data.text);
+      return NextResponse.json({ error: "هذا الرابط محمي أو غير مدعوم حالياً" }, { status: 400 });
     }
 
+    // إرجاع رابط التحميل المباشر
+    return NextResponse.json({ downloadUrl: data.url });
+
   } catch (error) {
-    return NextResponse.json({ error: "fetch failed ⚠️" }, { status: 500 });
+    return NextResponse.json({ error: "فشل الاتصال بمحرك التحميل" }, { status: 500 });
   }
 }
