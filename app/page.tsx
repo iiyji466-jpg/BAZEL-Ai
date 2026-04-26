@@ -133,12 +133,12 @@ function EmailTemp() {
             <div style={{ background: "#060606", border: "1px solid #1a1a1a", borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ flex: 1, color: "#00bcd4", fontSize: 14, direction: "ltr", textAlign: "left", wordBreak: "break-all", fontWeight: 600 }}>{email}</span>
               <button onClick={copyEmail}
-                style={{ background: copied ? "#2d8a58" : "#1a1a1a", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0, transition: "background 0.2s" }}>
+                style={{ background: copied ? "#2d8a58" : "#1a1a1a", border: "none", color: "#fff", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontFamily: "inherit", flexShrink: 0 }}>
                 {copied ? "✓ تم" : "نسخ"}
               </button>
             </div>
             <button onClick={checkMsgs} disabled={checking}
-              style={{ background: "#111", border: "1px solid #1a1a1a", color: "#fff", padding: 12, borderRadius: 12, cursor: "pointer", fontSize: 14, fontFamily: "inherit", width: "100%", opacity: checking ? 0.6 : 1 }}>
+              style={{ background: "#111", border: "1px solid #1a1a1a", color: "#fff", padding: 12, borderRadius: 12, cursor: "pointer", fontSize: 14, width: "100%", opacity: checking ? 0.6 : 1 }}>
               {checking ? "⌛ جاري التحديث..." : "🔄 تحديث الرسائل"}
             </button>
             {msgs.length === 0 ? (
@@ -165,7 +165,7 @@ function EmailTemp() {
               </div>
             )}
             <button onClick={reset}
-              style={{ background: "none", border: "1px solid #1a1a1a", color: "#444", padding: 10, borderRadius: 12, cursor: "pointer", fontSize: 13, fontFamily: "inherit", width: "100%" }}>
+              style={{ background: "none", border: "1px solid #1a1a1a", color: "#444", padding: 10, borderRadius: 12, cursor: "pointer", fontSize: 13, width: "100%" }}>
               🗑️ إنشاء إيميل جديد
             </button>
           </>
@@ -199,7 +199,6 @@ export default function Home() {
 
   const bot = BOTS.find((b) => b.id === selectedBot);
 
-  // دالة التحميل المباشر لصياد المقاطع
   function downloadWithExternal(videoUrl: string) {
     window.open(`https://snapsave.app/en?url=${encodeURIComponent(videoUrl)}`, '_blank');
   }
@@ -436,4 +435,4 @@ export default function Home() {
         .platform-tag { background: #0d0d0d; border: 1px solid #141414; color: #444; padding: 3px 10px; border-radius: 20px; font-size: 11px; }
         .media-input { background: #060606; border: 1px solid #141414; border-radius: 12px; padding: 12px 14px; color: #fff; font-size: 14px; outline: none; width: 100%; direction: ltr; font-family: inherit; }
         .media-input:focus { border-color: #2a2a2a; }
-        .media-btn { background: #fff; border: none; color: #000; padding: 13px; border-radius: 12px; cursor: pointer; font-size: 14px
+        .media-btn { background: #fff; border: none; color: #000; padding: 13px; border-radius: 12px; cursor: pointer; font-size: 14px; font-family: inherit; font-weight:
