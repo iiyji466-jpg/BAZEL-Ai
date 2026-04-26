@@ -11,8 +11,10 @@ export async function POST(req: NextRequest) {
     const isTikTok = url.includes("tiktok.com");
     const isYoutube = url.includes("youtube.com") || url.includes("youtu.be");
     const isInstagram = url.includes("instagram.com");
+    const isTwitter = url.includes("twitter.com") || url.includes("x.com");
+    const isFacebook = url.includes("facebook.com") || url.includes("fb.watch");
 
-    // TikTok
+    // TikTok - مجاني
     if (isTikTok) {
       const res = await fetch("https://tikwm.com/api/", {
         method: "POST",
@@ -24,6 +26,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ downloadUrl: data.data.hdplay || data.data.play });
       }
       throw new Error("تعذر تنزيل TikTok");
+    }
+
+    // Instagram
+    if (isInstagram) {
+      const res = await fetch(
+        `https://instagram-reels-downloader-api.p.rapidapi.com/download?url=${encodeURIComponent(url)}`,
+        {
+          method: "GET",
+          headers: {
+            "x-rapidapi-key": key,
+            "x-rapidapi-host": "instagram-reels-downloader-api.p.rapidapi.com",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const data = await res.json();
+      const videoUrl = data?.video_url || data?.url || data?.data?.video_url || data?.download_url;
+      if (videoUrl) {
+        return NextResponse.json({ downloadUrl: videoUrl });
+      }
+      throw new Error("تعذر تنزيل Instagram");
     }
 
     // YouTube
@@ -45,42 +68,26 @@ export async function POST(req: NextRequest) {
       throw new Error("تعذر تنزيل YouTube");
     }
 
-    // Instagram
-    if (isInstagram) {
+    // Twitter/X و Facebook
+    if (isTwitter || isFacebook) {
       const res = await fetch(
-        `https://instagram-scraper-api2.p.rapidapi.com/v1/post_info?code_or_id_or_url=${encodeURIComponent(url)}`,
+        `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
         {
           headers: {
             "x-rapidapi-key": key,
-            "x-rapidapi-host": "instagram-scraper-api2.p.rapidapi.com",
+            "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
           },
         }
       );
       const data = await res.json();
-      const videoUrl = data?.data?.video_url || data?.data?.items?.[0]?.video_url;
-      if (videoUrl) {
-        return NextResponse.json({ downloadUrl: videoUrl });
+      if (data.success && data.links?.length > 0) {
+        const best = data.links.find((l: any) => l.quality === "hd") || data.links[0];
+        return NextResponse.json({ downloadUrl: best.link });
       }
-      throw new Error("تعذر تنزيل Instagram");
+      throw new Error("تعذر تنزيل الرابط");
     }
 
-    // Twitter/Facebook
-    const res = await fetch(
-      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
-      {
-        headers: {
-          "x-rapidapi-key": key,
-          "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
-        },
-      }
-    );
-    const data = await res.json();
-    if (data.success && data.links?.length > 0) {
-      const best = data.links.find((l: any) => l.quality === "hd") || data.links[0];
-      return NextResponse.json({ downloadUrl: best.link });
-    }
-
-    throw new Error("تعذر تنزيل الرابط");
+    throw new Error("المنصة غير مدعومة. جرب: TikTok، Instagram، YouTube، Twitter، Facebook");
 
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || "حدث خطأ" }, { status: 500 });
