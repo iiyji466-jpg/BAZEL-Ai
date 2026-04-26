@@ -2,14 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json();
+    let { url } = await req.json();
 
-    if (!url) {
-      return NextResponse.json({ error: "الرجاء إدخال رابط صالح" }, { status: 400 });
+    // 1. تنظيف الرابط تلقائياً (إزالة المسافات أو أي نص زائد قبل أو بعد الرابط)
+    if (url) {
+      // هذا السطر يستخرج الرابط فقط حتى لو نسخ المستخدم نصاً معه
+      const urlMatch = url.match(/\bhttps?:\/\/\S+/gi);
+      url = urlMatch ? urlMatch[0] : url.trim();
     }
 
-    // استخدام محرك Cobalt الشامل الذي يدعم (TikTok, Instagram, YouTube, Twitter)
-    // هذا المحرك يغنيك عن عمل detectPlatform يدوياً
+    if (!url || !url.startsWith("http")) {
+      return NextResponse.json({ error: "الرجاء لصق رابط صحيح" }, { status: 400 });
+    }
+
+    // 2. الاتصال بالمحرك العالمي (يدعم يوتيوب المختصر، تيك توك، انستقرام)
     const response = await fetch("https://api.cobalt.tools/api/json", {
       method: "POST",
       headers: {
@@ -17,26 +23,26 @@ export async function POST(req: NextRequest) {
         "Accept": "application/json",
       },
       body: JSON.stringify({
-        url: url,
+        url: url, 
         vQuality: "720",
+        vCodec: "h264",
+        isNoTTWatermark: true, // يزيل علامة تيك توك تلقائياً
       }),
     });
 
     const data = await response.json();
 
-    if (data.url) {
-      // إرجاع النتيجة بنفس الصيغة التي تتوقعها واجهتك
+    // 3. إرسال الرابط النهائي للمستخدم
+    if (data && data.url) {
       return NextResponse.json({
         downloadUrl: data.url,
-        title: "Video Downloaded",
-        platform: "All-in-One"
+        title: "تم تجهيز الفيديو بنجاح"
       });
     } else {
-      return NextResponse.json({ error: "تعذر جلب الفيديو من هذا الرابط" }, { status: 400 });
+      return NextResponse.json({ error: "عذراً، هذا الرابط غير مدعوم حالياً" }, { status: 400 });
     }
 
   } catch (error) {
-    console.error("Download Error:", error);
-    return NextResponse.json({ error: "حدث خطأ أثناء الاتصال بالخادم" }, { status: 500 });
+    return NextResponse.json({ error: "fetch failed ⚠️" }, { status: 500 });
   }
 }
