@@ -1,19 +1,129 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// ============================================================
+// تحديد المنصة من الرابط
+// ============================================================
 function detectPlatform(url: string): string {
   if (/youtube\.com|youtu\.be/.test(url)) return "youtube";
   if (/tiktok\.com/.test(url)) return "tiktok";
   if (/instagram\.com/.test(url)) return "instagram";
   if (/facebook\.com|fb\.watch/.test(url)) return "facebook";
   if (/twitter\.com|x\.com/.test(url)) return "twitter";
-  if (/twitch\.tv/.test(url)) return "twitch";
   if (/vimeo\.com/.test(url)) return "vimeo";
+  if (/twitch\.tv/.test(url)) return "twitch";
   if (/reddit\.com/.test(url)) return "reddit";
-  if (/soundcloud\.com/.test(url)) return "soundcloud";
   return "unknown";
 }
 
-// ===== cobalt.tools - يدعم 20+ منصة =====
+// ============================================================
+// 1. RapidAPI - ytdl-free (يوتيوب + كل المنصات)
+// المفتاح: RAPIDAPI_KEY في Vercel Environment Variables
+// ============================================================
+async function tryRapidAPI(url: string): Promise<string | null> {
+  const key = process.env.RAPIDAPI_KEY;
+  if (!key) {
+    console.log("❌ RAPIDAPI_KEY غير موجود في Environment Variables");
+    return null;
+  }
+
+  try {
+    const res = await fetch(
+      `https://ytdl-free.p.rapidapi.com/dl?url=${encodeURIComponent(url)}`,
+      {
+        method: "GET",
+        headers: {
+          "x-rapidapi-key": key,
+          "x-rapidapi-host": "ytdl-free.p.rapidapi.com",
+        },
+        signal: AbortSignal.timeout(15000),
+      }
+    );
+
+    const data = await res.json();
+    console.log("RapidAPI response:", JSON.stringify(data).slice(0, 200));
+
+    // استخراج رابط التحميل من أي شكل للرد
+    const link =
+      data?.url ||
+      data?.download_url ||
+      data?.link ||
+      data?.formats?.[0]?.url ||
+      data?.video?.url ||
+      data?.data?.url ||
+      null;
+
+    return typeof link === "string" && link.startsWith("http") ? link : null;
+  } catch (e) {
+    console.log("RapidAPI failed:", e);
+    return null;
+  }
+}
+
+// ============================================================
+// 2. RapidAPI - all-social-downloader (بديل)
+// اشترك أيضاً في: https://rapidapi.com/social-download-api/api/all-social-downloader
+// ============================================================
+async function tryAllSocialDownloader(url: string): Promise<string | null> {
+  const key = process.env.RAPIDAPI_KEY;
+  if (!key) return null;
+
+  try {
+    const res = await fetch(
+      `https://all-social-downloader.p.rapidapi.com/download?url=${encodeURIComponent(url)}`,
+      {
+        method: "GET",
+        headers: {
+          "x-rapidapi-key": key,
+          "x-rapidapi-host": "all-social-downloader.p.rapidapi.com",
+        },
+        signal: AbortSignal.timeout(15000),
+      }
+    );
+
+    const data = await res.json();
+    console.log("AllSocial response:", JSON.stringify(data).slice(0, 200));
+
+    const link =
+      data?.data?.[0]?.url ||
+      data?.medias?.[0]?.url ||
+      data?.url ||
+      null;
+
+    return typeof link === "string" && link.startsWith("http") ? link : null;
+  } catch (e) {
+    console.log("AllSocialDownloader failed:", e);
+    return null;
+  }
+}
+
+// ============================================================
+// 3. tikwm - تيك توك بدون مفتاح (موثوق جداً)
+// ============================================================
+async function tryTikwm(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://tikwm.com/api/?url=${encodeURIComponent(url)}`,
+      {
+        headers: { "User-Agent": "Mozilla/5.0" },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    const data = await res.json();
+
+    if (data.code === 0 && data.data) {
+      const link = data.data.hdplay || data.data.play || data.data.wmplay;
+      return typeof link === "string" && link.startsWith("http") ? link : null;
+    }
+    return null;
+  } catch (e) {
+    console.log("tikwm failed:", e);
+    return null;
+  }
+}
+
+// ============================================================
+// 4. cobalt.tools - مجاني بدون مفتاح
+// ============================================================
 async function tryCobalt(url: string): Promise<string | null> {
   try {
     const res = await fetch("https://api.cobalt.tools/", {
@@ -28,172 +138,77 @@ async function tryCobalt(url: string): Promise<string | null> {
         filenameStyle: "basic",
         downloadMode: "auto",
       }),
+      signal: AbortSignal.timeout(12000),
     });
 
     const data = await res.json();
     const link = data?.url || data?.stream || null;
-    return link?.startsWith("http") ? link : null;
+    return typeof link === "string" && link.startsWith("http") ? link : null;
   } catch (e) {
     console.log("cobalt failed:", e);
     return null;
   }
 }
 
-// ===== tikwm - تيك توك + انستغرام + يوتيوب =====
-async function tryTikwm(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://tikwm.com/api/?url=${encodeURIComponent(url)}`,
-      { headers: { "User-Agent": "Mozilla/5.0" } }
-    );
-    const data = await res.json();
-    if (data.code === 0 && data.data) {
-      const link = data.data.hdplay || data.data.play || data.data.wmplay;
-      return link?.startsWith("http") ? link : null;
-    }
-    return null;
-  } catch (e) {
-    console.log("tikwm failed:", e);
-    return null;
-  }
-}
-
-// ===== SnapSave - انستغرام + فيسبوك =====
-async function trySnapSave(url: string): Promise<string | null> {
-  try {
-    const res = await fetch("https://snapsave.app/action.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0",
-        "Referer": "https://snapsave.app/",
-      },
-      body: `url=${encodeURIComponent(url)}`,
-    });
-    const data = await res.json();
-    const link = data?.data?.[0]?.url || data?.url || null;
-    return link?.startsWith("http") ? link : null;
-  } catch (e) {
-    console.log("snapsave failed:", e);
-    return null;
-  }
-}
-
-// ===== SaveFrom - يوتيوب + فيسبوك + انستغرام =====
-async function trySaveFrom(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://worker.sf-tools.com/savefrom.php?sf_url=${encodeURIComponent(url)}`,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0",
-          "Referer": "https://en.savefrom.net/",
-        },
-      }
-    );
-    const data = await res.json();
-    const link = data?.url?.[0]?.url || data?.urls?.[0]?.url || null;
-    return link?.startsWith("http") ? link : null;
-  } catch (e) {
-    console.log("savefrom failed:", e);
-    return null;
-  }
-}
-
-// ===== yt1s - يوتيوب فقط =====
-async function tryYt1s(url: string): Promise<string | null> {
-  try {
-    const r1 = await fetch("https://yt1s.is/api/ajaxSearch/index", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0",
-      },
-      body: `q=${encodeURIComponent(url)}&vt=homevideo`,
-    });
-    const d1 = await r1.json();
-    if (!d1?.vid || !d1?.kc) return null;
-
-    const r2 = await fetch("https://yt1s.is/api/ajaxConvert/convert", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0",
-      },
-      body: `vid=${d1.vid}&k=${d1.kc}`,
-    });
-    const d2 = await r2.json();
-    const link = d2?.dlink;
-    return link?.startsWith("http") ? link : null;
-  } catch (e) {
-    console.log("yt1s failed:", e);
-    return null;
-  }
-}
-
-// ===== API الرئيسي =====
+// ============================================================
+// API الرئيسي - يجرب كل الطرق بالترتيب
+// ============================================================
 export async function POST(req: NextRequest) {
   try {
-    const { url } = await req.json();
+    const body = await req.json();
+    const url = body?.url?.trim();
 
-    if (!url?.trim()) {
+    if (!url) {
       return NextResponse.json(
         { error: "الرجاء إدخال رابط صحيح" },
         { status: 400 }
       );
     }
 
-    const cleanUrl = url.trim();
-    const platform = detectPlatform(cleanUrl);
-    console.log(`[download] platform: ${platform}`);
+    const platform = detectPlatform(url);
+    console.log(`\n[download] platform: ${platform}`);
+    console.log(`[download] url: ${url}`);
+    console.log(`[download] RAPIDAPI_KEY موجود: ${!!process.env.RAPIDAPI_KEY}`);
 
     let downloadUrl: string | null = null;
 
-    if (platform === "youtube") {
+    if (platform === "tiktok") {
+      // تيك توك: tikwm الأقوى ثم RapidAPI
       downloadUrl =
-        (await tryCobalt(cleanUrl)) ||
-        (await tryYt1s(cleanUrl)) ||
-        (await trySaveFrom(cleanUrl));
+        (await tryTikwm(url)) ||
+        (await tryRapidAPI(url)) ||
+        (await tryAllSocialDownloader(url)) ||
+        (await tryCobalt(url));
 
-    } else if (platform === "tiktok") {
+    } else if (platform === "youtube") {
+      // يوتيوب: RapidAPI أولاً ثم cobalt
       downloadUrl =
-        (await tryTikwm(cleanUrl)) ||
-        (await tryCobalt(cleanUrl));
-
-    } else if (platform === "instagram") {
-      downloadUrl =
-        (await tryCobalt(cleanUrl)) ||
-        (await tryTikwm(cleanUrl)) ||
-        (await trySnapSave(cleanUrl));
-
-    } else if (platform === "facebook") {
-      downloadUrl =
-        (await tryCobalt(cleanUrl)) ||
-        (await trySnapSave(cleanUrl)) ||
-        (await trySaveFrom(cleanUrl));
-
-    } else if (platform === "twitter") {
-      downloadUrl =
-        (await tryCobalt(cleanUrl)) ||
-        (await trySaveFrom(cleanUrl));
+        (await tryRapidAPI(url)) ||
+        (await tryAllSocialDownloader(url)) ||
+        (await tryCobalt(url));
 
     } else {
-      // أي منصة أخرى: vimeo, twitch, reddit, soundcloud...
+      // بقية المنصات: RapidAPI أولاً
       downloadUrl =
-        (await tryCobalt(cleanUrl)) ||
-        (await tryTikwm(cleanUrl)) ||
-        (await trySaveFrom(cleanUrl));
+        (await tryRapidAPI(url)) ||
+        (await tryAllSocialDownloader(url)) ||
+        (await tryTikwm(url)) ||
+        (await tryCobalt(url));
     }
 
     if (!downloadUrl) {
+      const noKey = !process.env.RAPIDAPI_KEY;
       return NextResponse.json(
         {
-          error: "تعذر تحميل الفيديو من هذا الرابط. جرب رابطاً آخر",
+          error: noKey
+            ? "⚠️ أضف RAPIDAPI_KEY في Vercel Environment Variables"
+            : "تعذر تحميل الفيديو. جرب رابطاً آخر",
         },
         { status: 400 }
       );
     }
 
+    console.log(`[download] ✅ نجح: ${downloadUrl.slice(0, 80)}...`);
     return NextResponse.json({ success: true, downloadUrl });
 
   } catch (error) {
