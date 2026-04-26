@@ -8,37 +8,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "الرابط مطلوب" }, { status: 400 });
     }
 
-    if (!process.env.RAPIDAPI_KEY) {
-      return NextResponse.json({ error: "مفتاح API غير موجود" }, { status: 500 });
-    }
-
-    const response = await fetch(
-      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
+    // استخدام SaveFrom API
+    const encoded = encodeURIComponent(url);
+    const res = await fetch(
+      `https://worker.sf-tools.com/savefrom.php?sf_url=${encoded}`,
       {
-        method: "GET",
         headers: {
-          "x-rapidapi-key": process.env.RAPIDAPI_KEY,
-          "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
+          "User-Agent": "Mozilla/5.0",
+          "Referer": "https://en.savefrom.net/",
         },
       }
     );
 
-    const data = await response.json();
-    console.log("[تنزيل] رد API:", JSON.stringify(data));
+    const data = await res.json();
 
-    if (!data.success || !data.links || data.links.length === 0) {
+    if (!data.url || data.url.length === 0) {
       return NextResponse.json(
-        { error: "تعذر تحميل الفيديو. جرب رابطاً آخر" },
+        { error: "تعذر تنزيل الرابط. جرب رابطاً آخر" },
         { status: 400 }
       );
     }
 
-    const best =
-      data.links.find((l: any) => l.quality === "hd") ||
-      data.links.find((l: any) => l.quality === "sd") ||
-      data.links[0];
+    // أفضل جودة متاحة
+    const best = data.url.find((u: any) =>
+      u.type?.includes("mp4") && u.id?.includes("137")
+    ) || data.url[0];
 
-    return NextResponse.json({ downloadUrl: best.link });
+    return NextResponse.json({
+      downloadUrl: best.url,
+      title: data.title || "فيديو",
+    });
+
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || "حدث خطأ في الخادم" },
