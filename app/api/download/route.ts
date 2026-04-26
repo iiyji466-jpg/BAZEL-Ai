@@ -20,40 +20,66 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // API واحد فقط مؤكد يعمل (يدعم يوتيوب، تيك توك، انستغرام، فيسبوك)
-    const response = await fetch(`https://api.kenk.xyz/download?url=${encodeURIComponent(finalUrl)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json'
+    // المحاولة الأولى: tikwm
+    try {
+      const res = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(finalUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      
+      const data = await res.json();
+      
+      if (data.code === 0 && data.data) {
+        const videoUrl = data.data.play || data.data.wmplay || data.data.hdplay;
+        if (videoUrl && videoUrl.startsWith('http')) {
+          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+        }
       }
-    });
-
-    const data = await response.json();
-    
-    if (data.status === true && data.result) {
-      const videoUrl = data.result.video || data.result.url || data.result;
-      if (videoUrl && videoUrl.startsWith('http')) {
-        return NextResponse.json({ 
-          success: true, 
-          downloadUrl: videoUrl,
-          title: data.result.title || "فيديو"
-        });
-      }
+    } catch (err) {
+      console.log("tikwm failed");
     }
 
-    // إذا فشل، استخدم حل بديل لليوتيوب فقط
-    if (finalUrl.includes('youtube.com')) {
-      const videoId = extractYouTubeId(finalUrl);
-      if (videoId) {
-        // رابط مباشر لتحميل الفيديو (جودة SD)
-        return NextResponse.json({ 
-          success: true, 
-          downloadUrl: `https://inv.odyssey346.dev/api/v1/videos/${videoId}`,
-          note: "قد يستغرق التحميل بضع ثوان"
-        });
+    // المحاولة الثانية: snapsave (بديل ممتاز)
+    try {
+      const res = await fetch(`https://snapsave.app/api/ajaxSearch?q=${encodeURIComponent(finalUrl)}`, {
+        headers: { 
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        method: 'POST',
+        body: new URLSearchParams({ q: finalUrl })
+      });
+      
+      const data = await res.json();
+      
+      if (data.video) {
+        const videoUrl = data.video.noWatermark || data.video.url;
+        if (videoUrl && videoUrl.startsWith('http')) {
+          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+        }
       }
+      if (data.url && data.url.startsWith('http')) {
+        return NextResponse.json({ success: true, downloadUrl: data.url });
+      }
+    } catch (err) {
+      console.log("snapsave failed");
     }
 
+    // المحاولة الثالثة: savefrom
+    try {
+      const res = await fetch(`https://savefrom.net/api/convert?url=${encodeURIComponent(finalUrl)}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      });
+      
+      const data = await res.json();
+      
+      if (data.downloadUrl && data.downloadUrl.startsWith('http')) {
+        return NextResponse.json({ success: true, downloadUrl: data.downloadUrl });
+      }
+    } catch (err) {
+      console.log("savefrom failed");
+    }
+
+    // إذا فشل كل شيء
     return NextResponse.json({ 
       error: "تعذر تحميل الفيديو. تأكد من الرابط وجرب مرة أخرى" 
     }, { status: 400 });
@@ -62,18 +88,4 @@ export async function POST(req: NextRequest) {
     console.error("Error:", error);
     return NextResponse.json({ error: "خطأ في السيرفر ⚠️" }, { status: 500 });
   }
-}
-
-function extractYouTubeId(url: string): string | null {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=)([\w-]+)/,
-    /(?:youtu\.be\/)([\w-]+)/,
-    /(?:youtube\.com\/shorts\/)([\w-]+)/,
-    /(?:youtube\.com\/embed\/)([\w-]+)/
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
 }
