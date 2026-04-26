@@ -1,4 +1,3 @@
-// app/api/download/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -11,79 +10,73 @@ export async function POST(req: NextRequest) {
 
     const cleanUrl = url.trim();
     
-    // استخراج ID الفيديو من رابط يوتيوب
-    let videoId = "";
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=)([\w-]+)/,
-      /(?:youtu\.be\/)([\w-]+)/,
-      /(?:youtube\.com\/shorts\/)([\w-]+)/
-    ];
-    
-    for (const pattern of patterns) {
-      const match = cleanUrl.match(pattern);
-      if (match) {
-        videoId = match[1];
-        break;
-      }
-    }
-    
-    if (!videoId) {
-      // إذا لم يكن يوتيوب، جرب TikWM للمنصات الأخرى
-      const tiktokRes = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`);
-      const tiktokData = await tiktokRes.json();
-      
-      if (tiktokData.code === 0 && tiktokData.data) {
-        return NextResponse.json({
-          success: true,
-          downloadUrl: tiktokData.data.play
-        });
-      }
-      
-      return NextResponse.json({ error: "رابط غير مدعوم" }, { status: 400 });
-    }
-    
-    // ليوتيوب - استخدم رابط مباشر من خوادم جوجل
-    // هذه الطريقة تعمل مع الفيديوهات العامة فقط
-    const directUrl = `https://inv.riverside.rocks/watch?v=${videoId}`;
-    
-    // جلب صفحة الفيديو لاستخراج الرابط المباشر
-    const pageRes = await fetch(directUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
-    });
-    
-    const html = await pageRes.text();
-    
-    // استخراج رابط الفيديو من الصفحة
-    const videoMatch = html.match(/https?:\/\/[^\s"']+\.mp4[^\s"']*/i);
-    
-    if (videoMatch) {
-      return NextResponse.json({
-        success: true,
-        downloadUrl: videoMatch[0],
-        title: "فيديو يوتيوب"
+    // المحاولة الأولى: tikwm (يدعم تيك توك، انستغرام، يوتيوب، فيسبوك)
+    try {
+      const res1 = await fetch(`https://tikwm.com/api/?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
       });
-    }
-    
-    // حل بديل: استخدام yewtu.be (بديل يوتيوب يعمل على Vercel)
-    const yewtuUrl = `https://yewtu.be/latest_version?id=${videoId}&itag=18`;
-    const yewtuRes = await fetch(yewtuUrl);
-    const data = await yewtuRes.text();
-    
-    const urlMatch = data.match(/https?:\/\/[^\s"'<>]+\.mp4[^\s"'<>]*/i);
-    
-    if (urlMatch) {
-      return NextResponse.json({
-        success: true,
-        downloadUrl: urlMatch[0]
-      });
+      const data1 = await res1.json();
+      
+      if (data1.code === 0 && data1.data) {
+        const videoUrl = data1.data.play || data1.data.wmplay || data1.data.hdplay;
+        if (videoUrl && videoUrl.startsWith('http')) {
+          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+        }
+      }
+    } catch (err) {
+      console.log("tikwm failed:", err);
     }
 
-    return NextResponse.json({ error: "فشل تحميل الفيديو من يوتيوب" }, { status: 400 });
+    // المحاولة الثانية: oceansaver
+    try {
+      const res2 = await fetch(`https://p.oceansaver.in/ajax/download.php?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      const data2 = await res2.json();
+      
+      if (data2.video) {
+        const videoUrl = data2.video.noWatermark || data2.video.watermark || data2.video.url;
+        if (videoUrl && videoUrl.startsWith('http')) {
+          return NextResponse.json({ success: true, downloadUrl: videoUrl });
+        }
+      }
+      if (data2.url && data2.url.startsWith('http')) {
+        return NextResponse.json({ success: true, downloadUrl: data2.url });
+      }
+    } catch (err) {
+      console.log("oceansaver failed:", err);
+    }
+
+    // المحاولة الثالثة: ssstik
+    try {
+      const res3 = await fetch(`https://ssstik.io/abc?url=${encodeURIComponent(cleanUrl)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      const data3 = await res3.json();
+      
+      if (data3.url && data3.url.startsWith('http')) {
+        return NextResponse.json({ success: true, downloadUrl: data3.url });
+      }
+      if (data3.video && data3.video.startsWith('http')) {
+        return NextResponse.json({ success: true, downloadUrl: data3.video });
+      }
+    } catch (err) {
+      console.log("ssstik failed:", err);
+    }
+
+    // إذا فشل كل شيء
+    return NextResponse.json({ 
+      error: "تعذر تحميل الفيديو. تأكد من الرابط وجرب مرة أخرى" 
+    }, { status: 400 });
 
   } catch (error) {
     console.error("Error:", error);
-    return NextResponse.json({ error: "خطأ في السيرفر" }, { status: 500 });
+    return NextResponse.json({ error: "خطأ في السيرفر ⚠️" }, { status: 500 });
   }
 }
