@@ -1,3 +1,4 @@
+// app/api/download/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -10,33 +11,59 @@ export async function POST(req: NextRequest) {
 
     const cleanUrl = url.trim();
 
-    // سنستخدم هنا API مجاني تماماً لا يطلب مفتاح (Key)
-    // هذا المحرك يدعم تيك توك، إنستغرام، وفيسبوك
-    const apiUrl = `https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(cleanUrl)}`;
+    // محاولة عدة APIs بديلة (إذا فشل واحد جرب الثاني)
+    const apis = [
+      `https://p.oceansaver.in/ajax/download.php?url=${encodeURIComponent(cleanUrl)}`,
+      `https://tikdown.org/api/ajaxSearch?q=${encodeURIComponent(cleanUrl)}`,
+      `https://api.tikmate.app/api/lookup?url=${encodeURIComponent(cleanUrl)}`
+    ];
 
-    const response = await fetch(apiUrl, {
-      method: "GET", // هذا الـ API يستخدم GET للسهولة
-      headers: {
-        "Accept": "application/json"
+    for (const apiUrl of apis) {
+      try {
+        const response = await fetch(apiUrl, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          next: { revalidate: 0 } // منع الكاش
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        
+        // استخراج رابط التحميل بطرق مختلفة حسب استجابة الـ API
+        let downloadUrl = null;
+        
+        if (data.video) {
+          downloadUrl = data.video.noWatermark || data.video.url || data.video;
+        } else if (data.url) {
+          downloadUrl = data.url;
+        } else if (data.data && data.data[0]) {
+          downloadUrl = data.data[0].url;
+        } else if (typeof data === 'string' && data.includes('http')) {
+          downloadUrl = data;
+        }
+
+        if (downloadUrl && downloadUrl.startsWith('http')) {
+          return NextResponse.json({ 
+            success: true,
+            downloadUrl: downloadUrl,
+            title: data.title || "فيديو",
+            thumbnail: data.thumbnail || data.cover || null
+          });
+        }
+      } catch (err) {
+        console.log("API failed, trying next...");
+        continue;
       }
-    });
-
-    const data = await response.json();
-
-    // التحقق من استجابة المحرك المجاني
-    if (data && data.video) {
-      return NextResponse.json({ 
-        success: true,
-        downloadUrl: data.video.noWatermark || data.video.url, // جلب الفيديو بدون علامة مائية
-        title: data.title || "Video",
-        thumbnail: data.video.cover
-      });
-    } else if (data && data.url) { 
-        // استجابة احتياطية لبعض المحركات الأخرى
-        return NextResponse.json({ success: true, downloadUrl: data.url });
-    } else {
-      return NextResponse.json({ error: "تعذر استخراج الرابط، جرب رابطاً آخر" }, { status: 400 });
     }
+
+    // إذا فشلت كل المحاولات
+    return NextResponse.json({ 
+      error: "تعذر استخراج الرابط، تأكد من صحة الرابط وجرب مرة أخرى" 
+    }, { status: 400 });
 
   } catch (error) {
     console.error("Error:", error);
