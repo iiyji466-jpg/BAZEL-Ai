@@ -61,6 +61,7 @@ export default function Home() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -111,9 +112,7 @@ export default function Home() {
   const stopRecording = () => {
     if (!isRecording) return;
     const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop();
-    }
+    if (recorder && recorder.state !== "inactive") recorder.stop();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -121,6 +120,18 @@ export default function Home() {
     mediaRecorderRef.current = null;
     setIsRecording(false);
     setInput(prev => prev + (prev ? " " : "") + "🎤 رسالة صوتية");
+  };
+
+  const speakLastMessage = () => {
+    const lastBot = [...messages].reverse().find(m => m.role === "assistant");
+    if (!lastBot) return;
+    if (isSpeaking) { window.speechSynthesis.cancel(); setIsSpeaking(false); return; }
+    const text = lastBot.content.replace(/<[^>]*>/g, "");
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "ar-SA";
+    utterance.onend = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
   };
 
   const copyMessage = (text: string, index: number) => {
@@ -171,17 +182,12 @@ export default function Home() {
     setMessages(prev => [...prev, newMsg]);
     setLoading(true);
 
-    // إنشاء صورة
     if (isImageRequest(userMsg)) {
       setImageLoading(true);
       try {
         const imageUrl = await generateImage(userMsg);
-        setMessages(prev => [...prev, {
-          role: "assistant",
-          content: "تفضل! هذه الصورة التي طلبتها 🎨",
-          generatedImage: imageUrl
-        }]);
-      } catch (err: any) {
+        setMessages(prev => [...prev, { role: "assistant", content: "تفضل! هذه الصورة التي طلبتها 🎨", generatedImage: imageUrl }]);
+      } catch {
         setMessages(prev => [...prev, { role: "assistant", content: "عذراً، لم أتمكن من إنشاء الصورة. حاول مجدداً." }]);
       } finally {
         setLoading(false);
@@ -217,7 +223,6 @@ export default function Home() {
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { background: #000 !important; color: #ececec; font-family: 'Noto Kufi Arabic', 'Segoe UI', Arial, sans-serif; direction: rtl; font-size: 16px; line-height: 1.8; -webkit-font-smoothing: antialiased; }
-
         .app { min-height: 100vh; display: flex; flex-direction: column; background: #000; }
 
         .header { padding: 14px 20px; border-bottom: 1px solid #111; display: flex; align-items: center; gap: 12px; background: #000; position: sticky; top: 0; z-index: 10; }
@@ -226,7 +231,6 @@ export default function Home() {
         .header-text p { font-size: 11px; color: #444; margin-top: 1px; }
         .badge { margin-right: auto; background: #0d0d0d; border: 1px solid #1a1a1a; color: #555; font-size: 11px; padding: 4px 12px; border-radius: 20px; }
 
-        /* الصفحة الرئيسية */
         .home-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; gap: 36px; }
         .welcome-title { font-size: 28px; font-weight: 700; color: #fff; text-align: center; }
         .suggestions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; max-width: 480px; }
@@ -237,12 +241,11 @@ export default function Home() {
         .bots-label { font-size: 12px; color: #333; margin-bottom: 12px; text-align: center; }
         .bots-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
         .bot-card { background: #0a0a0a; border: 1px solid #141414; border-radius: 16px; padding: 20px 12px; cursor: pointer; transition: all 0.2s; text-align: center; }
-        .bot-card:hover { border-color: var(--cc); background: #0f0f0f; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .bot-card:hover { border-color: var(--cc); background: #0f0f0f; transform: translateY(-2px); }
         .bot-icon { font-size: 28px; display: block; margin-bottom: 8px; }
         .bot-name { font-size: 12px; font-weight: 600; color: #ddd; margin-bottom: 4px; }
         .bot-desc { font-size: 10px; color: #333; line-height: 1.5; }
 
-        /* شاشة الشات */
         .chat-screen { flex: 1; display: flex; flex-direction: column; max-width: 700px; width: 100%; margin: 0 auto; padding: 0 16px; }
         .chat-header { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid #111; position: sticky; top: 53px; background: #000; z-index: 9; }
         .back-btn { background: #0d0d0d; border: 1px solid #1a1a1a; color: #888; font-size: 13px; padding: 6px 14px; border-radius: 10px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
@@ -253,27 +256,22 @@ export default function Home() {
         .status-dot { width: 6px; height: 6px; background: #2d8a58; border-radius: 50%; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-        /* الرسائل */
         .messages-area { flex: 1; overflow-y: auto; padding: 24px 0 12px; display: flex; flex-direction: column; min-height: 0; max-height: calc(100vh - 200px); }
         .messages-area::-webkit-scrollbar { width: 2px; }
         .messages-area::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 4px; }
-
         .empty-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 0; }
-        .empty-chat .big-icon { font-size: 48px; filter: grayscale(0.5); }
+        .empty-chat .big-icon { font-size: 48px; }
         .empty-chat p { font-size: 14px; color: #2a2a2a; }
 
-        /* رسالة المستخدم */
         .user-msg-wrap { display: flex; justify-content: flex-end; margin: 6px 0; animation: fadeIn 0.2s ease; }
         .user-bubble { background: #1a1a1a; color: #fff; padding: 12px 18px; border-radius: 20px 20px 4px 20px; font-size: 16px; line-height: 1.75; max-width: 80%; white-space: pre-wrap; word-break: break-word; text-align: right; }
         .user-image-preview { max-width: 180px; border-radius: 12px; margin-bottom: 8px; display: block; }
 
-        /* رسالة البوت */
         .bot-msg-wrap { display: flex; gap: 12px; align-items: flex-start; margin: 6px 0 2px; animation: fadeIn 0.2s ease; }
         .bot-avatar { width: 30px; height: 30px; background: #0d0d0d; border: 1px solid #141414; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; margin-top: 4px; }
         .bot-bubble { flex: 1; font-size: 16px; line-height: 1.85; color: #e0e0e0; word-break: break-word; text-align: right; padding-top: 2px; }
         .generated-image { max-width: 100%; border-radius: 16px; margin-top: 12px; display: block; border: 1px solid #1a1a1a; }
 
-        /* أيقونات التفاعل */
         .msg-actions { display: flex; gap: 14px; margin: 6px 0 18px; padding-right: 42px; }
         .action-btn { background: none; border: none; color: #2a2a2a; cursor: pointer; font-size: 17px; padding: 4px 6px; border-radius: 8px; transition: all 0.15s; }
         .action-btn:hover { color: #666; }
@@ -281,7 +279,6 @@ export default function Home() {
 
         @keyframes fadeIn { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
 
-        /* مؤشر الكتابة */
         .typing-wrap { display: flex; gap: 12px; align-items: center; margin: 6px 0 18px; }
         .typing-dots { display: flex; gap: 5px; padding: 8px 4px; }
         .typing-dots span { width: 7px; height: 7px; background: #2a2a2a; border-radius: 50%; animation: bounce 1.2s infinite; }
@@ -291,30 +288,47 @@ export default function Home() {
 
         .error-msg { background: rgba(255,50,50,0.06); border: 1px solid rgba(255,50,50,0.12); color: #ff5555; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin: 8px 0; }
 
-        /* معاينة الصورة المرفقة */
         .img-preview-bar { display: flex; align-items: center; gap: 10px; background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 12px; padding: 8px 12px; margin-bottom: 8px; }
         .img-preview-bar img { width: 36px; height: 36px; border-radius: 8px; object-fit: cover; }
         .img-preview-bar span { font-size: 12px; color: #555; flex: 1; }
         .remove-img-btn { background: none; border: none; color: #333; cursor: pointer; font-size: 18px; line-height: 1; transition: color 0.15s; }
         .remove-img-btn:hover { color: #ff5555; }
 
-        /* منطقة الإدخال */
+        /* منطقة الإدخال - مثل الصورة */
         .input-area { padding: 10px 0 20px; }
-        .input-wrap { background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 28px; padding: 10px 12px 10px 12px; display: flex; align-items: flex-end; gap: 8px; transition: border-color 0.2s; }
+        .input-row { display: flex; align-items: center; gap: 8px; }
+
+        /* الدائرة السوداء يسار - زر الصوت */
+        .speak-btn { background: #000; border: 2px solid #1e1e1e; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+        .speak-btn:hover { border-color: #333; }
+        .speak-btn.speaking { border-color: #555; }
+        .speak-btn svg { width: 20px; height: 20px; }
+
+        /* صندوق النص */
+        .input-wrap { background: #111; border: 1px solid #1e1e1e; border-radius: 30px; padding: 11px 18px; display: flex; align-items: center; gap: 12px; flex: 1; transition: border-color 0.2s; }
         .input-wrap:focus-within { border-color: #2a2a2a; }
-        .send-btn { background: #fff; border: none; color: #000; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; transition: all 0.15s; flex-shrink: 0; }
-        .send-btn:hover:not(:disabled) { background: #ddd; }
-        .send-btn:disabled { background: #141414; color: #2a2a2a; cursor: not-allowed; }
-        .input-wrap textarea { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 15px; font-family: inherit; resize: none; line-height: 1.6; max-height: 130px; padding: 2px 0; text-align: right; }
+        .input-wrap textarea { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 15px; font-family: inherit; resize: none; line-height: 1.6; max-height: 130px; padding: 0; text-align: right; }
         .input-wrap textarea::placeholder { color: #2a2a2a; }
-        .mic-btn { background: none; border: none; cursor: pointer; font-size: 20px; padding: 4px; border-radius: 8px; transition: all 0.15s; flex-shrink: 0; opacity: 0.5; }
-        .mic-btn:hover { opacity: 1; }
-        .mic-btn.rec { opacity: 1; animation: pulse 1s infinite; filter: drop-shadow(0 0 6px red); }
-        .img-btn { background: none; border: none; cursor: pointer; font-size: 20px; padding: 4px; border-radius: 8px; transition: all 0.15s; flex-shrink: 0; opacity: 0.5; }
-        .img-btn:hover { opacity: 1; }
+
+        /* الخط الفاصل */
+        .divider-line { width: 1px; height: 22px; background: #222; flex-shrink: 0; }
+
+        /* ميكروفون */
+        .mic-btn { background: none; border: none; cursor: pointer; padding: 2px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+        .mic-btn svg { width: 22px; height: 22px; stroke: #555; fill: none; transition: stroke 0.15s; }
+        .mic-btn:hover svg { stroke: #999; }
+        .mic-btn.rec svg { stroke: #ff3333; }
+
+        /* زر + يمين */
+        .plus-btn { background: #111; border: 1px solid #1e1e1e; color: #777; width: 46px; height: 46px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; font-size: 24px; font-weight: 300; line-height: 1; }
+        .plus-btn:hover { background: #1a1a1a; color: #fff; border-color: #2a2a2a; }
+
         .input-hint { font-size: 11px; color: #1a1a1a; text-align: center; margin-top: 8px; }
 
-        /* صياد المقاطع */
+        .image-generating { display: flex; align-items: center; gap: 10px; color: #555; font-size: 14px; }
+        .img-spinner { width: 18px; height: 18px; border: 2px solid #1a1a1a; border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         .media-screen { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 32px 16px; }
         .media-box { background: #0a0a0a; border: 1px solid #141414; border-radius: 20px; padding: 28px; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 14px; }
         .media-box h2 { color: #fff; font-size: 17px; text-align: center; font-weight: 700; }
@@ -329,13 +343,8 @@ export default function Home() {
         .media-error { background: rgba(255,50,50,0.06); border: 1px solid rgba(255,50,50,0.12); color: #ff5555; padding: 10px 14px; border-radius: 10px; font-size: 13px; text-align: center; }
         .download-result { background: rgba(45,138,88,0.08); border: 1px solid rgba(45,138,88,0.2); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
         .download-result p { color: #2d8a58; font-size: 14px; }
-        .download-link { background: #2d8a58; color: #fff; padding: 11px 26px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; font-family: inherit; transition: all 0.2s; }
+        .download-link { background: #2d8a58; color: #fff; padding: 11px 26px; border-radius: 10px; font-weight: 700; font-size: 14px; text-decoration: none; font-family: inherit; }
         .download-link:hover { background: #256e47; }
-
-        /* تحميل الصورة */
-        .image-generating { display: flex; align-items: center; gap: 10px; color: #555; font-size: 14px; margin: 8px 0; }
-        .img-spinner { width: 18px; height: 18px; border: 2px solid #1a1a1a; border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
 
       <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageUpload} />
@@ -499,29 +508,53 @@ export default function Home() {
                   <button className="remove-img-btn" onClick={() => setSelectedImage(null)}>✕</button>
                 </div>
               )}
-              <div className="input-wrap">
-                <button className="send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading}>
-                  {loading ? "⌛" : "↑"}
+              <div className="input-row">
+
+                {/* دائرة سوداء - تشغيل صوت */}
+                <button className={`speak-btn ${isSpeaking ? "speaking" : ""}`} onClick={speakLastMessage} title="استمع للرد">
+                  <svg viewBox="0 0 24 24" fill="white">
+                    <rect x="2" y="9" width="3" height="6" rx="1"/>
+                    <rect x="6" y="6" width="3" height="12" rx="1"/>
+                    <rect x="10" y="3" width="3" height="18" rx="1"/>
+                    <rect x="14" y="6" width="3" height="12" rx="1"/>
+                    <rect x="18" y="9" width="3" height="6" rx="1"/>
+                  </svg>
                 </button>
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKey}
-                  placeholder="اكتب رسالتك..."
-                  rows={1}
-                  disabled={loading}
-                />
-                <button className="mic-btn" title="تسجيل صوت"
-                  onPointerDown={startRecording}
-                  onPointerUp={stopRecording}
-                  onPointerLeave={stopRecording}>
-                  🎤
+
+                {/* صندوق النص */}
+                <div className="input-wrap">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKey}
+                    placeholder="اسأل عن أي شيء"
+                    rows={1}
+                    disabled={loading}
+                  />
+                  <div className="divider-line" />
+                  {/* ميكروفون */}
+                  <button
+                    className={`mic-btn ${isRecording ? "rec" : ""}`}
+                    onPointerDown={startRecording}
+                    onPointerUp={stopRecording}
+                    onPointerLeave={stopRecording}
+                    title="تسجيل صوت"
+                  >
+                    <svg viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="2" width="6" height="12" rx="3"/>
+                      <path d="M5 10a7 7 0 0 0 14 0"/>
+                      <line x1="12" y1="19" x2="12" y2="22"/>
+                      <line x1="9" y1="22" x2="15" y2="22"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* زر + لإضافة صورة */}
+                <button className="plus-btn" onClick={() => fileInputRef.current?.click()} title="إضافة صورة">
+                  +
                 </button>
-                <button className="img-btn" title="رفع صورة"
-                  onClick={() => fileInputRef.current?.click()}>
-                  🖼
-                </button>
+
               </div>
               <p className="input-hint">Enter للإرسال • Shift+Enter لسطر جديد</p>
             </div>
