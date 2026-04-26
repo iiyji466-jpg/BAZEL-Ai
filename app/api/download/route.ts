@@ -5,39 +5,41 @@ export async function POST(req: NextRequest) {
     const { url } = await req.json();
 
     if (!url) {
-      return NextResponse.json({ error: "أدخل الرابط أولاً" }, { status: 400 });
+      return NextResponse.json({ error: "الرجاء إدخال الرابط" }, { status: 400 });
     }
 
-    // 1. تنظيف الرابط من أي حروف زائدة قد يضعها المستخدم بالخطأ
-    const cleanUrl = url.trim().match(/https?:\/\/[^\s]+/g)?.[0] || url.trim();
+    const cleanUrl = url.trim();
 
-    // 2. طلب الفيديو من محرك Cobalt المخصص لتجاوز الحظر
-    const response = await fetch("https://api.cobalt.tools/api/json", {
-      method: "POST",
+    // سنستخدم هنا API مجاني تماماً لا يطلب مفتاح (Key)
+    // هذا المحرك يدعم تيك توك، إنستغرام، وفيسبوك
+    const apiUrl = `https://api.tiklydown.eu.org/api/download?url=${encodeURIComponent(cleanUrl)}`;
+
+    const response = await fetch(apiUrl, {
+      method: "GET", // هذا الـ API يستخدم GET للسهولة
       headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        url: cleanUrl,
-        vQuality: "720", 
-        vCodec: "h264",
-        isNoTTWatermark: true // إزالة علامة تيك توك المائية
-      }),
+        "Accept": "application/json"
+      }
     });
 
     const data = await response.json();
 
-    // 3. التحقق من النتيجة
-    if (data.status === "error" || !data.url) {
-      console.error("خطأ من المحرك:", data.text);
-      return NextResponse.json({ error: "هذا الرابط محمي أو غير مدعوم حالياً" }, { status: 400 });
+    // التحقق من استجابة المحرك المجاني
+    if (data && data.video) {
+      return NextResponse.json({ 
+        success: true,
+        downloadUrl: data.video.noWatermark || data.video.url, // جلب الفيديو بدون علامة مائية
+        title: data.title || "Video",
+        thumbnail: data.video.cover
+      });
+    } else if (data && data.url) { 
+        // استجابة احتياطية لبعض المحركات الأخرى
+        return NextResponse.json({ success: true, downloadUrl: data.url });
+    } else {
+      return NextResponse.json({ error: "تعذر استخراج الرابط، جرب رابطاً آخر" }, { status: 400 });
     }
 
-    // إرجاع رابط التحميل المباشر
-    return NextResponse.json({ downloadUrl: data.url });
-
   } catch (error) {
-    return NextResponse.json({ error: "فشل الاتصال بمحرك التحميل" }, { status: 500 });
+    console.error("Error:", error);
+    return NextResponse.json({ error: "خطأ في السيرفر ⚠️" }, { status: 500 });
   }
 }
