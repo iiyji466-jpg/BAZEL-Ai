@@ -9,26 +9,28 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const response = await fetch(
-      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
-      {
-        headers: {
-          'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
-          'x-rapidapi-host': 'social-media-video-downloader.p.rapidapi.com',
-        },
-      }
-    );
+    const response = await fetch('https://co.wuk.sh/api/json', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        url: url,
+        vQuality: 'max',
+        filenamePattern: 'pretty',
+      }),
+    });
 
     const data = await response.json();
 
-    if (!data.links || data.links.length === 0) {
+    if (data.status === 'error' || data.status === 'rate-limit') {
       return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
     }
 
     return NextResponse.json({
-      title: data.title,
-      thumbnail: data.picture,
-      links: data.links, // روابط تنزيل بجودات مختلفة
+      url: data.url,
+      status: data.status,
     });
 
   } catch (err) {
