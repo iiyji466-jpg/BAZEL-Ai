@@ -11,10 +11,7 @@ const nextConfig = {
         ]
       }
     ];
-  },
-
-  // زيادة حجم الاستجابة
-  
+  }
 }
 
-module.exports = nextConfig
+module.exports = nextConfig;
