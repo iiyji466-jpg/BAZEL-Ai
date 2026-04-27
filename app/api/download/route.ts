@@ -8,25 +8,25 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const response = await fetch('https://cobalt.tools/api/json', {
+    const response = await fetch('https://YOUR_RENDER_URL.onrender.com/download', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        url: url,
-        vQuality: 'max',
-      }),
+      body: JSON.stringify({ url }),
     });
 
     const data = await response.json();
 
-    if (!data.url) {
+    if (data.error) {
       return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
     }
 
-    return NextResponse.json({ url: data.url });
+    return NextResponse.json({
+      url: data.url,
+      title: data.title,
+      thumbnail: data.thumbnail,
+    });
 
   } catch (err) {
     return NextResponse.json({ error: 'خطأ في السيرفر' }, { status: 500 });
