@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const key = process.env.RAPIDAPI_KEY;
     if (!key) return NextResponse.json({ error: "مفتاح API غير موجود" }, { status: 500 });
 
-    // ===== TikTok (مجاني بدون RapidAPI) =====
+    // ===== TikTok =====
     if (url.includes("tiktok.com")) {
       const res = await fetch("https://tikwm.com/api/", {
         method: "POST",
@@ -24,68 +24,120 @@ export async function POST(req: NextRequest) {
 
     // ===== Instagram =====
     if (url.includes("instagram.com")) {
-      const res = await fetch(
-        `https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi?url=${encodeURIComponent(url)}`,
-        {
-          method: "GET",
-          headers: {
-            "x-rapidapi-key": key,
-            "x-rapidapi-host": "instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com",
-          },
+      // محاولة 1: API الأول
+      try {
+        const res = await fetch(
+          "https://instagram-scraper-api2.p.rapidapi.com/v1/post_info?code_or_id_or_url=" +
+            encodeURIComponent(url),
+          {
+            headers: {
+              "x-rapidapi-key": key,
+              "x-rapidapi-host": "instagram-scraper-api2.p.rapidapi.com",
+            },
+          }
+        );
+        const data = await res.json();
+        console.log("IG API1:", JSON.stringify(data).slice(0, 300));
+
+        const videoUrl =
+          data?.data?.video_url ||
+          data?.data?.versions?.items?.[0]?.url ||
+          data?.data?.carousel_media?.[0]?.video_versions?.[0]?.url;
+
+        if (videoUrl) return NextResponse.json({ downloadUrl: videoUrl });
+      } catch (_) {}
+
+      // محاولة 2: API الثاني
+      try {
+        const res = await fetch(
+          "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=" +
+            encodeURIComponent(url),
+          {
+            headers: {
+              "x-rapidapi-key": key,
+              "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
+            },
+          }
+        );
+        const data = await res.json();
+        console.log("IG API2:", JSON.stringify(data).slice(0, 300));
+
+        const links = data?.links;
+        if (links?.length) {
+          const video = links.find((l: any) =>
+            l.quality?.includes("720") || l.quality?.includes("hd") || l.type === "mp4"
+          ) || links[0];
+          if (video?.link) return NextResponse.json({ downloadUrl: video.link });
         }
-      );
-      const data = await res.json();
-      console.log("Instagram response:", JSON.stringify(data));
+      } catch (_) {}
 
-      const videoUrl =
-        data?.video_url ||
-        data?.url ||
-        data?.[0]?.url ||
-        data?.media?.[0]?.url;
+      // محاولة 3: API الثالث
+      try {
+        const res = await fetch(
+          "https://all-in-one-social-media-downloader.p.rapidapi.com/downloader?url=" +
+            encodeURIComponent(url),
+          {
+            headers: {
+              "x-rapidapi-key": key,
+              "x-rapidapi-host": "all-in-one-social-media-downloader.p.rapidapi.com",
+            },
+          }
+        );
+        const data = await res.json();
+        console.log("IG API3:", JSON.stringify(data).slice(0, 300));
 
-      if (videoUrl) return NextResponse.json({ downloadUrl: videoUrl });
-      throw new Error("تعذر تنزيل من Instagram");
+        const media = data?.medias || data?.data;
+        if (Array.isArray(media) && media.length) {
+          const video = media.find((m: any) => m.type === "video" || m.extension === "mp4");
+          if (video?.url) return NextResponse.json({ downloadUrl: video.url });
+        }
+      } catch (_) {}
+
+      throw new Error("تعذر تنزيل من Instagram. تأكد أن المنشور عام");
     }
 
     // ===== YouTube & Shorts =====
     if (url.includes("youtube.com") || url.includes("youtu.be")) {
       const res = await fetch(
-        `https://youtube-video-fast-downloader.p.rapidapi.com/dl?id=${encodeURIComponent(url)}`,
+        "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=" +
+          encodeURIComponent(url),
         {
-          method: "GET",
           headers: {
             "x-rapidapi-key": key,
-            "x-rapidapi-host": "youtube-video-fast-downloader.p.rapidapi.com",
+            "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
           },
         }
       );
       const data = await res.json();
-      console.log("YouTube response:", JSON.stringify(data));
-
-      const videoUrl =
-        data?.url ||
-        data?.link ||
-        data?.download_url ||
-        data?.formats?.find((f: any) => f.ext === "mp4")?.url;
-
-      if (videoUrl) return NextResponse.json({ downloadUrl: videoUrl });
+      const links = data?.links;
+      if (links?.length) {
+        const video =
+          links.find((l: any) => l.quality === "720p") ||
+          links.find((l: any) => l.quality === "480p") ||
+          links[0];
+        if (video?.link) return NextResponse.json({ downloadUrl: video.link });
+      }
       throw new Error("تعذر تنزيل من YouTube");
     }
 
     // ===== Facebook =====
     if (url.includes("facebook.com") || url.includes("fb.watch")) {
       const res = await fetch(
-        `https://facebook-video-downloader6.p.rapidapi.com/fbdown/getLinks?url=${encodeURIComponent(url)}`,
+        "https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=" +
+          encodeURIComponent(url),
         {
           headers: {
             "x-rapidapi-key": key,
-            "x-rapidapi-host": "facebook-video-downloader6.p.rapidapi.com",
+            "x-rapidapi-host": "social-media-video-downloader.p.rapidapi.com",
           },
         }
       );
       const data = await res.json();
-      const videoUrl = data?.HD || data?.SD;
-      if (videoUrl) return NextResponse.json({ downloadUrl: videoUrl });
+      const links = data?.links;
+      if (links?.length) {
+        const video = links.find((l: any) => l.quality?.includes("hd")) || links[0];
+        if (video?.link) return NextResponse.json({ downloadUrl: video.link });
+      }
       throw new Error("تعذر تنزيل من Facebook");
     }
 
