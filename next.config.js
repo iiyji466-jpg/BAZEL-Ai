@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // أضف هذا الجزء فقط - لا يخرب أي شيء
   async headers() {
     return [
       {
@@ -12,6 +11,11 @@ const nextConfig = {
         ]
       }
     ];
+  },
+
+  // زيادة حجم الاستجابة
+  experimental: {
+    serverActionsBodySizeLimit: '10mb',
   }
 }
 
