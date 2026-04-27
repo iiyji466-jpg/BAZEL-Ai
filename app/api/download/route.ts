@@ -1,63 +1,39 @@
-import { NextRequest, NextResponse } from "next/server";
+const data = await res.json();
+console.log("Media Downloader full response:", JSON.stringify(data, null, 2));
 
-export async function POST(req: NextRequest) {
-  try {
-    const { url } = await req.json();
-    if (!url) return NextResponse.json({ error: "الرابط مطلوب" }, { status: 400 });
+// استخراج آمن من أي مكان محتمل
+let videoUrl = null;
 
-    const key = process.env.RAPIDAPI_KEY;
-    if (!key) return NextResponse.json({ error: "مفتاح API غير موجود" }, { status: 500 });
-
-    // TikTok مجاني 100%
-    if (url.includes("tiktok.com")) {
-      const res = await fetch("https://tikwm.com/api/", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `url=${encodeURIComponent(url)}&hd=1`,
-      });
-      const data = await res.json();
-      if (data.code === 0 && data.data?.play) {
-        return NextResponse.json({ downloadUrl: data.data.hdplay || data.data.play });
-      }
-      throw new Error("تعذر تنزيل TikTok");
-    }
-
-    // كل المنصات - Instagram, YouTube, Twitter, Facebook, Pinterest...
-    const res = await fetch(
-      `https://media-downloader.p.rapidapi.com/api/download?url=${encodeURIComponent(url)}`,
-      {
-        method: "GET",
-        headers: {
-          "x-rapidapi-key": key,
-          "x-rapidapi-host": "media-downloader.p.rapidapi.com",
-        },
-      }
-    );
-
-    const data = await res.json();
-    console.log("Media Downloader response:", JSON.stringify(data));
-
-    // محاولة استخراج الرابط من أي شكل للرد
-    const videoUrl =
-      data?.url ||
-      data?.video_url ||
-      data?.download_url ||
-      data?.data?.url ||
-      data?.data?.video_url ||
-      data?.medias?.[0]?.url ||
-      data?.links?.[0]?.url ||
-      data?.result?.url;
-
-    if (videoUrl) {
-      return NextResponse.json({ downloadUrl: videoUrl });
-    }
-
-    throw new Error("تعذر تنزيل الرابط. تأكد أن الفيديو عام");
-
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: error?.message || "حدث خطأ" },
-      { status: 500 }
-    );
-  }
+// البحث في المستوى الأول
+if (typeof data === 'string') {
+  videoUrl = data; // بعض APIs ترجع الرابط مباشرة كنص
+} else if (data?.url) {
+  videoUrl = data.url;
+} else if (data?.video_url) {
+  videoUrl = data.video_url;
+} else if (data?.download_url) {
+  videoUrl = data.download_url;
 }
+
+// البحث داخل data.data (حالتك في الصورة)
+if (!videoUrl && data?.data) {
+  const d = data.data;
+  videoUrl = d.video_url || d.download_url || d.video || d.download || d.url;
+}
+
+// البحث داخل وسائط متعددة
+if (!videoUrl && data?.medias) {
+  const media = data.medias.find((m: any) => m.type === 'video' || m.url?.endsWith('.mp4'));
+  videoUrl = media?.url || data.medias[0]?.url;
+}
+
+// محاولة من أي قائمة روابط
+if (!videoUrl && data?.links) {
+  videoUrl = data.links[0]?.url;
+}
+
+if (videoUrl) {
+  return NextResponse.json({ downloadUrl: videoUrl });
+}
+
+throw new Error("تعذر تنزيل الرابط. تأكد أن الفيديو عام");
