@@ -14,9 +14,7 @@ const nextConfig = {
   },
 
   // زيادة حجم الاستجابة
-  experimental: {
-    serverActionsBodySizeLimit: '10mb',
-  }
+  
 }
 
 module.exports = nextConfig
