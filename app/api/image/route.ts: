@@ -1,15 +1,97 @@
+import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+const systemPrompts: Record<string, string> = {
+  translator: `أنت مترجم وموسوعة ذكية. مهامك:
+- الترجمة بين العربية والإنجليزية والفرنسية وأي لغة أخرى
+- تقديم معلومات موسوعية دقيقة
+- شرح المصطلحات والمفاهيم
+كن دقيقاً وموجزاً وواضحاً.`,
+  files: `أنت مساعد ذكي للإنتاجية وتحويل الملفات. مهامك:
+- توجيه المستخدمين لتحويل صيغ الملفات المختلفة
+- تقديم أكواد Python/JavaScript لمعالجة الملفات
+- المساعدة في أتمتة المهام المكتبية
+قدم كوداً قابلاً للتنفيذ عند الطلب.`,
+  groups: `أنت مساعد إدارة المجموعات والمجتمعات. مهامك:
+- تقديم قواعد وسياسات للمجموعات
+- اقتراح رسائل تحذير وترحيب
+- مساعدة في حل النزاعات
+كن عملياً ومنظماً.`,
+  media: `أنت صياد المقاطع الذكي. مهامك:
+- إرشاد المستخدمين لأدوات تنزيل الفيديو والصوت
+- تقديم أكواد yt-dlp وأدوات مشابهة
+- شرح الفروق بين الصيغ (MP4, MKV, MP3, FLAC...)
+قدم تعليمات تقنية دقيقة.`,
+  ai: `أنت مساعد ذكاء اصطناعي شامل. مهامك:
+- الإجابة على أي سؤال في أي مجال
+- تحليل النصوص والمشاكل المعقدة
+- كتابة الأكواد البرمجية بأي لغة
+- تحليل الصور ووصفها بدقة عند إرفاقها
+كن ذكياً وشاملاً ومفيداً.`,
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt } = await req.json();
-    if (!prompt) return NextResponse.json({ error: "الوصف مطلوب" }, { status: 400 });
+    const { message, bot, history, image } = await req.json();
 
-    const encodedPrompt = encodeURIComponent(prompt);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true&enhance=true`;
+    if (!message && !image)
+      return NextResponse.json({ error: "الرسالة مطلوبة" }, { status: 400 });
 
-    return NextResponse.json({ imageUrl });
+    if (!process.env.GROQ_API_KEY)
+      return NextResponse.json({ error: "GROQ_API_KEY غير موجود في المتغيرات البيئية" }, { status: 500 });
+
+    const systemPrompt = systemPrompts[bot] || systemPrompts["ai"];
+
+    // إذا فيه صورة → نستخدم نموذج الرؤية
+    const hasImage = !!image;
+    const model = hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile";
+
+    // بناء محتوى رسالة المستخدم
+    let userContent: any;
+    if (hasImage) {
+      userContent = [
+        {
+          type: "image_url",
+          image_url: { url: image }, // base64 data URL من الفرونت
+        },
+        {
+          type: "text",
+          text: message || "حلل هذه الصورة وصفها بالتفصيل باللغة العربية",
+        },
+      ];
+    } else {
+      userContent = message;
+    }
+
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      // التاريخ فقط للرسائل النصية - Vision لا يدعم تاريخ طويل
+      ...(hasImage
+        ? []
+        : (history?.map((msg: { role: string; content: string }) => ({
+            role: msg.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: msg.content,
+          })) || [])),
+      { role: "user" as const, content: userContent },
+    ];
+
+    const completion = await groq.chat.completions.create({
+      model,
+      messages: messages as any,
+      max_tokens: 1000,
+      temperature: 0.7,
+    });
+
+    const response = completion.choices[0]?.message?.content || "لا يوجد رد";
+    return NextResponse.json({ response });
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "حدث خطأ" }, { status: 500 });
+    console.error("Groq API Error:", error);
+    if (error?.status === 401)
+      return NextResponse.json({ error: "مفتاح API غير صالح" }, { status: 401 });
+    if (error?.status === 429)
+      return NextResponse.json({ error: "تجاوزت الحد المسموح — حاول لاحقاً" }, { status: 429 });
+    return NextResponse.json({ error: error?.message || "حدث خطأ في الخادم" }, { status: 500 });
   }
 }
