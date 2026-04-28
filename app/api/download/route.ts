@@ -5,6 +5,7 @@ function detectPlatform(url: string) {
   if (url.includes('tiktok.com')) return 'tiktok';
   if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
   if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
+  if (url.includes('facebook.com') || url.includes('fb.com')) return 'facebook';
   return 'other';
 }
 
@@ -18,51 +19,68 @@ export async function POST(req: NextRequest) {
   const platform = detectPlatform(url);
 
   try {
-    // Instagram و TikTok → API مختلف
-    if (platform === 'instagram' || platform === 'tiktok') {
-      const response = await fetch(
-        `https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi?url=${encodeURIComponent(url)}`,
-        {
-          headers: {
-            'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
-            'x-rapidapi-host': 'instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com',
-          },
-        }
-      );
-      const data = await response.json();
-      const videoUrl = data?.video_url || data?.url;
+    let apiUrl: string;
+    let host: string;
 
-      if (!videoUrl) {
-        return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
-      }
-
-      return NextResponse.json({ url: videoUrl, title: data?.title || 'فيديو' });
+    // اختيار API المناسب لكل منصة
+    switch (platform) {
+      case 'instagram':
+        apiUrl = `https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi?url=${encodeURIComponent(url)}`;
+        host = 'instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com';
+        break;
+        
+      case 'tiktok':
+        // استخدام API مخصص لـ TikTok
+        apiUrl = `https://tiktok-video-no-watermark2.p.rapidapi.com/?url=${encodeURIComponent(url)}`;
+        host = 'tiktok-video-no-watermark2.p.rapidapi.com';
+        break;
+        
+      default:
+        // YouTube, Twitter, Facebook
+        apiUrl = `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`;
+        host = 'social-media-video-downloader.p.rapidapi.com';
     }
 
-    // YouTube و باقي المنصات
-    const response = await fetch(
-      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
-      {
-        headers: {
-          'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
-          'x-rapidapi-host': 'social-media-video-downloader.p.rapidapi.com',
-        },
-      }
-    );
+    const response = await fetch(apiUrl, {
+      headers: {
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
+        'x-rapidapi-host': host,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
 
     const data = await response.json();
-    const videos = data?.contents?.[0]?.videos;
 
-    if (!videos || videos.length === 0) {
+    // استخراج الفيديو حسب المنصة
+    let videoUrl: string | undefined;
+    let title: string;
+
+    if (platform === 'instagram') {
+      videoUrl = data?.video_url || data?.url;
+      title = data?.title || 'Instagram Video';
+    } else if (platform === 'tiktok') {
+      videoUrl = data?.video || data?.play;
+      title = data?.title || 'TikTok Video';
+    } else {
+      const videos = data?.contents?.[0]?.videos;
+      videoUrl = videos?.[0]?.url;
+      title = data?.contents?.[0]?.title || 'Video';
+    }
+
+    if (!videoUrl) {
       return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
     }
 
-    return NextResponse.json({
-      url: videos[0].url,
-      title: data?.contents?.[0]?.title || 'فيديو',
-    });
+    return NextResponse.json({ url: videoUrl, title });
 
   } catch (err) {
-    return NextResponse.json({ error: 'خطأ في السيرفر' }, { status: 500 });
+    console.error('Download error:', err);
+    return NextResponse.json(
+      { error: 'خطأ في السيرفر: ' + (err as Error).message },
+      { status: 500 }
+    );
   }
 }
