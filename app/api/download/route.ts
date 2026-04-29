@@ -1,149 +1,88 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 function detectPlatform(url: string): string {
-  if (url.includes('instagram.com')) return 'instagram';
-  if (url.includes('tiktok.com')) return 'tiktok';
-  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
-  if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
-  if (url.includes('facebook.com') || url.includes('fb.com')) return 'facebook';
-  return 'unknown';
+  const lowUrl = url.toLowerCase();
+  if (lowUrl.includes('instagram.com') || lowUrl.includes('instagr.am')) return 'instagram';
+  if (lowUrl.includes('tiktok.com')) return 'tiktok';
+  if (lowUrl.includes('youtube.com') || lowUrl.includes('youtu.be')) return 'youtube';
+  if (lowUrl.includes('twitter.com') || lowUrl.includes('x.com')) return 'twitter';
+  if (lowUrl.includes('facebook.com') || lowUrl.includes('fb.watch') || lowUrl.includes('fb.com')) return 'facebook';
+  return 'general'; // تغيير من unknown إلى general لمحاولة المعالجة بأي حال
 }
 
 export async function POST(req: NextRequest) {
-  // ✅ فحص المفتاح
   if (!process.env.RAPIDAPI_KEY) {
-    return NextResponse.json(
-      { error: 'خطأ في إعدادات الخادم - المفتاح غير موجود' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'خطأ في إعدادات الخادم' }, { status: 500 });
   }
 
-  let url: string;
-  try {
-    const body = await req.json();
-    url = body.url;
-  } catch {
-    return NextResponse.json({ error: 'طلب غير صالح' }, { status: 400 });
-  }
+  let { url }: { url: string } = await req.json().catch(() => ({ url: '' }));
 
-  if (!url) {
-    return NextResponse.json({ error: 'الرابط مطلوب' }, { status: 400 });
+  if (!url) return NextResponse.json({ error: 'الرابط مطلوب' }, { status: 400 });
+
+  // 1. إصلاح الرابط إذا كان ينقصه البروتوكول (حل مشكلة الصورة)
+  if (!url.startsWith('http')) {
+    url = 'https://' + url;
   }
 
   const platform = detectPlatform(url);
-  console.log(`🔗 الرابط: ${url}, المنصة: ${platform}`);
-
-  if (platform === 'unknown') {
-    return NextResponse.json({ error: 'المنصة غير مدعومة' }, { status: 400 });
-  }
 
   try {
     let apiUrl: string;
     let host: string;
     let videoUrl: string | undefined;
-    let title: string;
+    let title: string = 'Video';
 
     switch (platform) {
-      // 📸 Instagram
       case 'instagram':
         host = 'instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com';
         apiUrl = `https://${host}/get-info-rapidapi?url=${encodeURIComponent(url)}`;
-
-        const igRes = await fetch(apiUrl, {
-          headers: {
-            'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-            'x-rapidapi-host': host,
-          },
-        });
-        const igData = await igRes.json();
-        videoUrl = igData?.video_url || igData?.url;
-        title = igData?.title || 'Instagram Video';
         break;
 
-      // 🎵 TikTok - استخدام API عام
       case 'tiktok':
         host = 'tiktok-video-no-watermark2.p.rapidapi.com';
         apiUrl = `https://${host}/?url=${encodeURIComponent(url)}`;
-
-        const tkRes = await fetch(apiUrl, {
-          headers: {
-            'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-            'x-rapidapi-host': host,
-          },
-        });
-
-        if (!tkRes.ok) {
-          console.error('❌ TikTok API فشل بحالة:', tkRes.status);
-          return NextResponse.json(
-            { error: 'تعذر تحميل فيديو TikTok. تأكد من الاشتراك في TikTok API على RapidAPI' },
-            { status: 400 }
-          );
-        }
-
-        const tkData = await tkRes.json();
-        videoUrl = tkData?.video || tkData?.play;
-        title = tkData?.title || 'TikTok Video';
         break;
 
-      // ▶️ YouTube - Twitter - Facebook
       default:
+        // 2. تحديث الـ Endpoint للـ API العام (هذا غالباً سبب الـ 404)
         host = 'social-media-video-downloader.p.rapidapi.com';
-        apiUrl = `https://${host}/smvd/get/all?url=${encodeURIComponent(url)}`;
-
-        const smRes = await fetch(apiUrl, {
-          headers: {
-            'x-rapidapi-key': process.env.RAPIDAPI_KEY,
-            'x-rapidapi-host': host,
-          },
-        });
-
-        if (!smRes.ok) {
-          console.error('❌ API العام فشل بحالة:', smRes.status);
-          return NextResponse.json(
-            { error: `فشل الاتصال بالخدمة (${smRes.status})` },
-            { status: 400 }
-          );
-        }
-
-        const smData = await smRes.json();
-        const videos = smData?.contents?.[0]?.videos;
-
-        if (!videos || videos.length === 0) {
-          return NextResponse.json(
-            { error: 'لم يتم العثور على فيديو' },
-            { status: 404 }
-          );
-        }
-
-        const bestVideo = videos.find((v: any) =>
-          v.label?.includes('1080p') || v.label?.includes('720p')
-        ) || videos[0];
-
-        videoUrl = bestVideo.url;
-        title = smData?.contents?.[0]?.title || 'Video';
+        apiUrl = `https://${host}/smvd/get/all?url=${encodeURIComponent(url)}`; 
         break;
+    }
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+        'x-rapidapi-host': host,
+      },
+    });
+
+    // 3. فحص الحالة قبل محاولة القراءة
+    if (!response.ok) {
+        // إذا فشل الـ API العام، جرب API بديل أو أبلغ المستخدم بوضوح
+        return NextResponse.json({ 
+            error: `فشل المصدر (${response.status}). تأكد من أن الرابط صحيح وعام.` 
+        }, { status: response.status });
+    }
+
+    const data = await response.json();
+
+    // 4. استخراج الرابط بناءً على هيكلة البيانات (تختلف من API لآخر)
+    if (platform === 'instagram') {
+        videoUrl = data.video_url || data.url;
+    } else if (platform === 'tiktok') {
+        videoUrl = data.data?.play || data.video;
+    } else {
+        videoUrl = data.contents?.[0]?.videos?.[0]?.url || data.links?.[0]?.url;
     }
 
     if (!videoUrl) {
-      return NextResponse.json(
-        { error: 'تعذر استخراج رابط الفيديو' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'لم يتم العثور على ملف فيديو' }, { status: 404 });
     }
 
-    console.log('✅ تم استخراج الفيديو بنجاح');
-    return NextResponse.json({
-      success: true,
-      platform,
-      title,
-      url: videoUrl,
-    });
+    return NextResponse.json({ success: true, url: videoUrl, title });
 
   } catch (error) {
-    console.error('❌ خطأ غير متوقع:', error);
-    return NextResponse.json(
-      { error: 'خطأ في السيرفر — حاول لاحقاً' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'حدث خطأ غير متوقع' }, { status: 500 });
   }
 }
