@@ -5,6 +5,7 @@ function detectPlatform(url: string) {
   if (url.includes('tiktok.com')) return 'tiktok';
   if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube';
   if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
+  if (url.includes('facebook.com') || url.includes('fb.watch')) return 'facebook';
   return 'other';
 }
 
@@ -18,49 +19,70 @@ export async function POST(req: NextRequest) {
   const platform = detectPlatform(url);
 
   try {
-    if (platform === 'instagram' || platform === 'tiktok') {
-      const response = await fetch(
-        `https://instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com/get-info-rapidapi?url=${encodeURIComponent(url)}`,
-        {
-          headers: {
-            'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
-            'x-rapidapi-host': 'instagram-downloader-download-instagram-videos-stories1.p.rapidapi.com',
-          },
-        }
-      );
-      const data = await response.json();
-      const videoUrl = data?.video_url || data?.url;
+    // ✅ API مجاني يدعم كل المنصات
+    const apiUrl = `https://api.cobalt.tools/api/json`;
 
-      if (!videoUrl) {
-        return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
-      }
-
-      return NextResponse.json({ url: videoUrl, title: data?.title || 'فيديو' });
-    }
-
-    const response = await fetch(
-      `https://social-media-video-downloader.p.rapidapi.com/smvd/get/all?url=${encodeURIComponent(url)}`,
-      {
-        headers: {
-          'x-rapidapi-key': process.env.RAPIDAPI_KEY!,
-          'x-rapidapi-host': 'social-media-video-downloader.p.rapidapi.com',
-        },
-      }
-    );
-
-    const data = await response.json();
-    const videos = data?.contents?.[0]?.videos;
-
-    if (!videos || videos.length === 0) {
-      return NextResponse.json({ error: 'تعذر جلب الفيديو' }, { status: 400 });
-    }
-
-    return NextResponse.json({
-      url: videos[0].url,
-      title: data?.contents?.[0]?.title || 'فيديو',
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        url: url,
+        vQuality: 'max',
+        filenamePattern: 'basic',
+        isNoTTWatermark: true,
+        isTTFullAudio: false,
+        isAudioOnly: false,
+      }),
     });
 
-  } catch (err) {
-    return NextResponse.json({ error: 'خطأ في السيرفر' }, { status: 500 });
+    const data = await response.json();
+
+    // cobalt يرجع status: "stream" أو "redirect" أو "picker"
+    if (data.status === 'stream' || data.status === 'redirect') {
+      return NextResponse.json({
+        downloadUrl: data.url,
+        title: platform,
+      });
+    }
+
+    if (data.status === 'picker') {
+      // يرجع قائمة - نأخذ أول فيديو
+      const first = data.picker?.[0];
+      if (first?.url) {
+        return NextResponse.json({
+          downloadUrl: first.url,
+          title: platform,
+        });
+      }
+    }
+
+    // fallback: جرب savefrom
+    const sfRes = await fetch(
+      `https://worker.savedeo.com/api/savefrom?url=${encodeURIComponent(url)}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } }
+    );
+
+    if (sfRes.ok) {
+      const sfData = await sfRes.json();
+      const videoUrl = sfData?.url?.[0]?.url || sfData?.media?.[0]?.url;
+      if (videoUrl) {
+        return NextResponse.json({ downloadUrl: videoUrl, title: platform });
+      }
+    }
+
+    return NextResponse.json(
+      { error: 'تعذر جلب الفيديو — تأكد من الرابط وحاول مجدداً' },
+      { status: 400 }
+    );
+
+  } catch (err: any) {
+    console.error('Download error:', err);
+    return NextResponse.json(
+      { error: 'خطأ في السيرفر — حاول لاحقاً' },
+      { status: 500 }
+    );
   }
 }
